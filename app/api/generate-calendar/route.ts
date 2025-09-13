@@ -365,14 +365,14 @@ Please respond with a JSON object containing:
 Focus on:
 - MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs}) - EVERY TV MUST HAVE CONTENT
 - MULTIPLE TVS PER GAME: When fewer games than TVs (2 games, 10 TVs), assign multiple TVs to each game for complete coverage
-- SEQUENTIAL SCHEDULING: Each TV should show multiple games throughout the day (Game 1: 1:00-4:30 PM, Game 2: 5:00-8:30 PM, Game 3: 9:00-12:30 AM, etc.)
+- SEQUENTIAL SCHEDULING: Each TV should show multiple games throughout the day if there are multiple games available (Game 1: 1:00-4:30 PM, Game 2: 5:00-8:30 PM, Game 3: 9:00-12:30 AM, etc.)
 - 3.5-HOUR GAME DURATION: NBA games last ~3.5 hours including pre/post-game, plan TV transitions accordingly
-- You can start switching the TV to tune into the game as early as 1 hour before the game starts if it is not busy and there are no other games on or if it's a game where the user's preferred team is playing.
-- NO EMPTY SCREENS: In restaurant/bar settings, blank TVs lose customers - plan continuous coverage
+- You can start switching the TV to tune into the game as early as 1 hour before the game starts if it is not busy and there are no other games on or if it's a game where the user's preferred team is playing. But if there is a game currently playing and a TV is currently not playing anything, it should tune into that available game even if it's low priority.
+- The TV should always tune into a game if there is a game available or even tune into a game early if there are no games available. 
 - AUTOMATIC TRANSITIONS: When one game ends (~3.5 hrs later), immediately assign the next available game to that TV
 - PROMINENCE-BASED ASSIGNMENT: Highest priority games go on most prominent/visible TVs
-- LOCATION INTELLIGENCE: Use TV setup description to understand viewing hierarchy
-- TIME CONFLICT RESOLUTION: Games at the same time should go on different TVs
+- LOCATION INTELLIGENCE: Use TV setup description provided by user to understand viewing hierarchy
+- TIME CONFLICT RESOLUTION: Games at the same time should go on different TVs with higher priority games going on more prominent TVs.
 - Balance the number of games per TV while respecting prominence hierarchy
 - For restaurant/bar: Prime games on main dining area TVs, secondary on bar/waiting areas
 - Background TVs (kitchen, corners) get lower priority content but still engaging games
