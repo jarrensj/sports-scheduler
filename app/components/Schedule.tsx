@@ -100,6 +100,8 @@ export default function Schedule() {
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(5) // Show 5 game dates per page
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -148,6 +150,38 @@ export default function Schedule() {
       .map(broadcaster => broadcaster.broadcasterDisplay)
   }
 
+  // Pagination logic
+  const getPaginatedData = () => {
+    if (!scheduleData) return { paginatedDates: [], totalPages: 0 }
+    
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    const paginatedDates = scheduleData.leagueSchedule.gameDates.slice(startIndex, endIndex)
+    const totalPages = Math.ceil(scheduleData.leagueSchedule.gameDates.length / itemsPerPage)
+    
+    return { paginatedDates, totalPages }
+  }
+
+  const { paginatedDates, totalPages } = getPaginatedData()
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page)
+    // Scroll to top when changing pages
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      goToPage(currentPage - 1)
+    }
+  }
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      goToPage(currentPage + 1)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen p-8 flex flex-col items-center justify-center">
@@ -189,7 +223,7 @@ export default function Schedule() {
         </header>
 
         <div className="space-y-8">
-          {scheduleData.leagueSchedule.gameDates.slice(0, 10).map((gameDate, dateIndex) => (
+          {paginatedDates.map((gameDate, dateIndex) => (
             <div key={dateIndex} className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="bg-blue-600 text-white px-6 py-4">
                 <h2 className="text-xl font-semibold">
@@ -299,11 +333,113 @@ export default function Schedule() {
           ))}
         </div>
 
-        {scheduleData.leagueSchedule.gameDates.length > 10 && (
-          <div className="text-center mt-8">
-            <p className="text-gray-600">
-              Showing first 10 game dates. Total: {scheduleData.leagueSchedule.gameDates.length} dates
-            </p>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex flex-col items-center mt-8 space-y-4">
+            {/* Page Info */}
+            <div className="text-center">
+              <p className="text-gray-600">
+                Showing page {currentPage} of {totalPages} 
+                <span className="text-gray-400 ml-2">
+                  ({scheduleData.leagueSchedule.gameDates.length} total game dates)
+                </span>
+              </p>
+            </div>
+
+            {/* Pagination Buttons */}
+            <div className="flex items-center space-x-2">
+              {/* Previous Button */}
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                }`}
+              >
+                <span className="flex items-center space-x-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span>Previous</span>
+                </span>
+              </button>
+
+              {/* Page Numbers */}
+              <div className="flex space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                  // Show first page, last page, current page, and pages around current
+                  const shouldShow = 
+                    pageNum === 1 || 
+                    pageNum === totalPages || 
+                    (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                  
+                  if (!shouldShow) {
+                    // Show ellipsis for gaps
+                    if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                      return (
+                        <span key={pageNum} className="px-3 py-2 text-gray-400">
+                          ...
+                        </span>
+                      )
+                    }
+                    return null
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => goToPage(pageNum)}
+                      className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+                        pageNum === currentPage
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Next Button */}
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                }`}
+              >
+                <span className="flex items-center space-x-1">
+                  <span>Next</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+
+            {/* Quick Jump to First/Last */}
+            {totalPages > 5 && (
+              <div className="flex space-x-2 text-sm">
+                <button
+                  onClick={() => goToPage(1)}
+                  className="text-blue-600 hover:text-blue-800 underline"
+                >
+                  Go to first page
+                </button>
+                <span className="text-gray-400">|</span>
+                <button
+                  onClick={() => goToPage(totalPages)}
+                  className="text-blue-600 hover:text-blue-800 underline"
+                >
+                  Go to last page
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
