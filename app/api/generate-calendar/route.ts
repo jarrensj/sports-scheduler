@@ -282,32 +282,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response)
     }
 
+    // Group games by date for better organization
+    const gamesByDate = new Map<string, typeof gamesWithPriority>()
+    gamesWithPriority.forEach(game => {
+      const dateKey = game.gameDateEst.split(' ')[0] // Extract just the date part
+      if (!gamesByDate.has(dateKey)) {
+        gamesByDate.set(dateKey, [])
+      }
+      gamesByDate.get(dateKey)!.push(game)
+    })
+
+    // Sort dates chronologically
+    const sortedDates = Array.from(gamesByDate.keys()).sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+
     // Create prompt for OpenAI
     const prompt = `
-You are a sports viewing optimizer for a multi-TV environment. Given the following NBA games for the week and user preferences, please:
+You are a sports viewing optimizer for a multi-TV environment. Given the following NBA games for the week and user preferences, please create TV schedules that respect DATES and TIMES.
 
-1. CREATE TIME-BASED TV SCHEDULES - Each TV gets a sequence of games throughout the day
+CRITICAL DATE AWARENESS:
+- Games on DIFFERENT DATES do NOT conflict with each other
+- Only games on the SAME DATE and SAME TIME create scheduling conflicts
+- Each date should have its own independent TV schedule
+- A TV can show Game A on Monday and Game B on Tuesday without any conflict
+
+SCHEDULING RULES PER DATE:
+1. CREATE DAILY TV SCHEDULES - Each TV gets games for each day independently
 2. NBA GAME DURATION - Each game lasts 3.5 hours (including pre/post-game coverage)
-3. SEQUENTIAL TRANSITIONS - When a game ends, that TV immediately switches to the next available game
-4. SIMULTANEOUS GAME SPLITTING - If 2 games start at same time, split TVs between them (e.g., 5 TVs on Game A, 5 TVs on Game B)
+3. SAME-DAY CONFLICTS ONLY - Only worry about time conflicts within the same date
+4. SIMULTANEOUS GAME SPLITTING - If 2 games start at same time ON THE SAME DATE, split TVs between them
 5. PREFERENCE-BASED SPLITTING - Use user's favorite teams to determine TV splits (60/40, 70/30, etc.)
-6. CONTINUOUS COVERAGE - Plan complete daily schedules so no TV is ever empty when games are available
+6. DAILY COVERAGE - Plan complete schedules for each date independently
 
-EXAMPLE SCHEDULING LOGIC:
-- 4:00 PM: 2 games start simultaneously
+EXAMPLE SCHEDULING LOGIC (RESPECTING DATES):
+MONDAY 1/15/2025:
+- 4:00 PM: 2 games start simultaneously on Monday
   * Game A (user's favorite team): TVs 1,2,3,4,5,6 (60% of TVs)  
   * Game B (regular game): TVs 7,8,9,10 (40% of TVs)
-- 7:30 PM: Games A & B end, next game starts at 8:00 PM
-  * All TVs (1-10) switch to the 8:00 PM game
-- 11:30 PM: 8:00 PM game ends, next game starts at 12:00 AM
-  * All TVs (1-10) switch to the 12:00 AM game
+- 7:30 PM: Monday games end, next Monday game at 8:00 PM
+  * All TVs switch to the 8:00 PM Monday game
+
+TUESDAY 1/16/2025:
+- 7:00 PM: Tuesday game starts (NO CONFLICT with Monday games)
+  * All TVs can show Tuesday game - it's a different day!
 
 CRITICAL REQUIREMENTS:
-- EVERY TV must have a complete schedule for the day
-- When games end (after 3.5 hours), TVs transition to next available game
-- Split TVs intelligently when multiple games start simultaneously
+- RESPECT DATES: Games on different dates do NOT conflict
+- SAME-DATE CONFLICTS: Only games on the same date and overlapping times conflict
+- DAILY INDEPENDENCE: Each date gets its own TV schedule
+- EVERY TV must have assignments for days when games are available
 - Use user preferences to weight TV assignments (favorite teams get more TVs)
-- NO TV should ever be empty if games are available
 
 TV SETUP ANALYSIS:
 ${userPreferences.tvSetupDescription || 'No description provided'}
@@ -317,34 +340,28 @@ ASSIGNMENT STRATEGY:
 - Keywords to look for: "main", "primary", "large", "65\"", "living room", "dining area" = high prominence
 - Keywords like: "kitchen", "small", "32\"", "background", "corner" = lower prominence
 - Assign games with highest priority scores to most prominent locations
-- CREATE SEQUENTIAL SCHEDULES: When Game A ends at 7:30 PM, assign Game B starting at 8:00 PM to same TV
-- CONTINUOUS COVERAGE: Each TV should show games from early afternoon through late night
-- HANDOFF PLANNING: Coordinate game transitions so TVs never go dark between games
+- CREATE DAILY SCHEDULES: Each date is independent - no cross-date conflicts
+- DAILY COVERAGE: Each TV should show available games for each date
 
 CRITICAL: You have ${userPreferences.numberOfTvs} TVs available. Use TV numbers 1 through ${userPreferences.numberOfTvs}.
-
-EXAMPLE DISTRIBUTION (for ${userPreferences.numberOfTvs} TVs):
-${Array.from({length: Math.min(userPreferences.numberOfTvs, 5)}, (_, i) => `- TV ${i + 1}: Should get games assigned`).join('\n')}
-${userPreferences.numberOfTvs > 5 ? `... and so on for all ${userPreferences.numberOfTvs} TVs` : ''}
-
-MULTIPLE TVS PER GAME STRATEGY:
-If there are fewer games than TVs (e.g., 2 games but 10 TVs):
-- Game 1 should appear on multiple TVs (e.g., TVs 1, 3, 5, 7, 9)  
-- Game 2 should appear on remaining TVs (e.g., TVs 2, 4, 6, 8, 10)
-- This ensures ALL TVs have content and customers can choose their preferred viewing angle
 
 User's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ') || 'None specified'}
 Number of TVs: ${userPreferences.numberOfTvs}
 Week: ${formatWeekRange(weekData.weekStart, weekData.weekEnd)}
 
-Games (sorted by calculated priority):
-${gamesWithPriority.map((game, index) => `
-${index + 1}. ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}
-   Time: ${game.gameStatusText}
-   Date: ${game.gameDateEst}
-   Priority: ${game.priority}/10
-   Teams: ${game.awayTeam.teamCity} ${game.awayTeam.teamName} vs ${game.homeTeam.teamCity} ${game.homeTeam.teamName}
-`).join('')}
+GAMES ORGANIZED BY DATE:
+${sortedDates.map(date => {
+  const gamesOnDate = gamesByDate.get(date)!
+  return `
+DATE: ${date}
+${gamesOnDate.map((game, index) => `
+  ${index + 1}. ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}
+     Time: ${game.gameStatusText}
+     Full DateTime: ${game.gameDateEst}
+     Priority: ${game.priority}/10
+     Teams: ${game.awayTeam.teamCity} ${game.awayTeam.teamName} vs ${game.homeTeam.teamCity} ${game.homeTeam.teamName}
+`).join('')}`
+}).join('\n')}
 
 Please respond with a JSON object containing:
 {
@@ -352,39 +369,44 @@ Please respond with a JSON object containing:
     {
       "gameId": "game_id_here",
       "tvNumber": 1,
-      "date": "01/15/2025",
+      "date": "2025-01-15",
       "timeSlot": "4:00-7:30 PM",
-      "reasoning": "Why this game is on this TV at this time (include transitions)"
+      "reasoning": "Monday 1/15 game on TV 1 - no conflicts with other dates"
     },
     {
-      "gameId": "next_game_id",
+      "gameId": "different_game_id",
       "tvNumber": 1,
-      "date": "01/15/2025",
-      "timeSlot": "8:00-11:30 PM", 
-      "reasoning": "Sequential assignment after previous game ends"
+      "date": "2025-01-16", 
+      "timeSlot": "7:00-10:30 PM",
+      "reasoning": "Tuesday 1/16 game on TV 1 - different date, no conflict with Monday"
+    },
+    {
+      "gameId": "same_day_game_id",
+      "tvNumber": 2,
+      "date": "2025-01-15",
+      "timeSlot": "4:00-7:30 PM",
+      "reasoning": "Monday 1/15 simultaneous game on TV 2 - same time as TV 1 but different TV"
     }
   ],
   "recommendations": [
-    "Daily scheduling strategy with game transitions explained"
+    "Date-aware scheduling strategy with proper daily organization"
   ],
-  "weekSummary": "Brief summary of daily TV schedules with transition timing"
+  "weekSummary": "Week-long TV schedule organized by date with no cross-date conflicts"
 }
 
 Focus on:
-- MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs}) - EVERY TV MUST HAVE CONTENT
-- MULTIPLE TVS PER GAME: When fewer games than TVs (2 games, 10 TVs), assign multiple TVs to each game for complete coverage
-- SEQUENTIAL SCHEDULING: Each TV should show multiple games throughout the day if there are multiple games available (Game 1: 1:00-4:30 PM, Game 2: 5:00-8:30 PM, Game 3: 9:00-12:30 AM, etc.)
-- 3.5-HOUR GAME DURATION: NBA games last ~3.5 hours including pre/post-game, plan TV transitions accordingly
-- You can start switching the TV to tune into the game as early as 1 hour before the game starts if it is not busy and there are no other games on or if it's a game where the user's preferred team is playing. But if there is a game currently playing and a TV is currently not playing anything, it should tune into that available game even if it's low priority.
-- The TV should always tune into a game if there is a game available or even tune into a game early if there are no games available. 
-- AUTOMATIC TRANSITIONS: When one game ends (~3.5 hrs later), immediately assign the next available game to that TV
+- MANDATORY DATE AWARENESS: Each assignment MUST include the correct date from the game data
+- DAILY INDEPENDENCE: Games on different dates can use the same TV without conflict
+- SAME-DATE CONFLICTS: Only worry about time conflicts within the same date
+- DISTRIBUTE ACROSS ALL TVs: Use TV numbers 1-${userPreferences.numberOfTvs} for each date that has games
+- MULTIPLE DAYS COVERAGE: If games span multiple dates, create assignments for each date
+- DATE FORMAT: Use YYYY-MM-DD format for dates (e.g., "2025-01-15")
+- 3.5-HOUR GAME DURATION: NBA games last ~3.5 hours including pre/post-game
+- DAILY TRANSITIONS: Within the same date, plan transitions between games
+- CROSS-DATE FREEDOM: TVs can show any game on different dates without restriction
 - PROMINENCE-BASED ASSIGNMENT: Highest priority games go on most prominent/visible TVs
 - LOCATION INTELLIGENCE: Use TV setup description provided by user to understand viewing hierarchy
-- TIME CONFLICT RESOLUTION: Games at the same time should go on different TVs with higher priority games going on more prominent TVs.
-- Balance the number of games per TV while respecting prominence hierarchy
-- For restaurant/bar: Prime games on main dining area TVs, secondary on bar/waiting areas
-- Background TVs (kitchen, corners) get lower priority content but still engaging games
-- REASONING: Always explain TV choice based on game priority + TV prominence/location + time scheduling
+- REASONING: Always explain TV choice including the DATE and why there are no conflicts with other dates
 `;
 
     const completion = await openai.chat.completions.create({
@@ -430,7 +452,9 @@ Focus on:
       aiData.tvAssignments = gamesWithPriority.map((game, index) => ({
         gameId: game.gameId,
         tvNumber: (index % userPreferences.numberOfTvs) + 1,
-        reasoning: `Distributed to TV ${(index % userPreferences.numberOfTvs) + 1} for balanced restaurant viewing`
+        date: game.gameDateEst.split(' ')[0], // Extract date part
+        timeSlot: `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`,
+        reasoning: `Distributed to TV ${(index % userPreferences.numberOfTvs) + 1} for balanced restaurant viewing on ${game.gameDateEst.split(' ')[0]}`
       }))
     }
     
@@ -440,61 +464,63 @@ Focus on:
     // Always force even distribution if we have more than 1 TV
     if (userPreferences.numberOfTvs > 1) {
       
-      // Create time-based assignments for ALL TVs
-      const assignments = []
+      // Create date-aware assignments for ALL TVs
+      const assignments: TvAssignment[] = []
       
-      // Sort games by time for proper sequencing
-      const gamesByTime = [...gamesWithPriority].sort((a, b) => {
-        return a.gameStatusText.localeCompare(b.gameStatusText)
-      })
-      
-      console.log(`Games sorted by time:`, gamesByTime.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
-      
-      // RESTAURANT LOGIC: Focus on main games of the day, not all week games
-      // For restaurant: Limit to top games and distribute those across multiple TVs
-      const mainGames = gamesByTime.slice(0, Math.min(4, gamesByTime.length)) // Max 4 main games per day
-      console.log(`Main games for restaurant distribution:`, mainGames.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
-      
-      // Assign games to ALL TVs - distribute main games across multiple TVs
-      for (let tvIndex = 0; tvIndex < userPreferences.numberOfTvs; tvIndex++) {
-        const tvNumber = tvIndex + 1
-        const gameIndex = tvIndex % mainGames.length
-        const game = mainGames[gameIndex]
+      // Process each date independently to avoid cross-date conflicts
+      sortedDates.forEach(date => {
+        const gamesOnDate = gamesByDate.get(date)!
         
-        // Calculate how many TVs will show this game
-        const tvsPerGame = Math.ceil(userPreferences.numberOfTvs / mainGames.length)
-        const gameAssignmentNumber = Math.floor(tvIndex / mainGames.length) + 1
-        
-        console.log(`TV ${tvNumber}: Assigning main game index ${gameIndex} (${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}) - ${gameAssignmentNumber} of ${tvsPerGame} TVs for this game`)
-        
-        let reasoning
-        if (mainGames.length < userPreferences.numberOfTvs) {
-          // Multiple TVs per game scenario (e.g., 2 games, 10 TVs)
-          reasoning = `TV ${tvNumber} showing this game (${gameAssignmentNumber} of ${tvsPerGame} TVs for this matchup) - restaurant multi-screen strategy`
-        } else {
-          // Enough games for each TV
-          reasoning = `Primary assignment for TV ${tvNumber} - sequential scheduling planned`
-        }
-        
-        assignments.push({
-          gameId: game.gameId,
-          tvNumber: tvNumber,
-          reasoning: reasoning
+        // Sort games by time within this date
+        const gamesByTimeOnDate = [...gamesOnDate].sort((a, b) => {
+          return a.gameStatusText.localeCompare(b.gameStatusText)
         })
-      }      
-      // Group assignments by game to show distribution
-      const gameAssignmentMap = new Map()
-      assignments.forEach(assignment => {
-        const game = mainGames.find(g => g.gameId === assignment.gameId)
-        if (game) {
-          const gameKey = `${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}`
-          if (!gameAssignmentMap.has(gameKey)) {
-            gameAssignmentMap.set(gameKey, [])
+        
+        console.log(`Processing date ${date} with ${gamesOnDate.length} games:`, gamesByTimeOnDate.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
+        
+        // For each date, distribute games across all TVs
+        // This ensures each date gets proper TV coverage
+        gamesByTimeOnDate.forEach((game, gameIndex) => {
+          // Distribute each game across multiple TVs if we have more TVs than games on this date
+          const tvsPerGame = Math.max(1, Math.floor(userPreferences.numberOfTvs / gamesByTimeOnDate.length))
+          const extraTvs = userPreferences.numberOfTvs % gamesByTimeOnDate.length
+          
+          // Calculate how many TVs this game should get
+          let tvsForThisGame = tvsPerGame
+          if (gameIndex < extraTvs) {
+            tvsForThisGame += 1 // Distribute extra TVs to first few games
           }
-          gameAssignmentMap.get(gameKey).push(assignment.tvNumber)
-        }
+          
+          // Assign TVs to this game
+          for (let tvOffset = 0; tvOffset < tvsForThisGame; tvOffset++) {
+            const tvNumber = (gameIndex * tvsPerGame) + tvOffset + (gameIndex < extraTvs ? gameIndex : extraTvs) + 1
+            
+            if (tvNumber <= userPreferences.numberOfTvs) {
+              const gameDate = game.gameDateEst.split(' ')[0] // Extract date part
+              const timeSlot = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
+              
+              let reasoning
+              if (gamesByTimeOnDate.length < userPreferences.numberOfTvs) {
+                reasoning = `TV ${tvNumber} showing ${date} game (${tvOffset + 1} of ${tvsForThisGame} TVs for this matchup) - multi-screen coverage for date ${date}`
+              } else {
+                reasoning = `TV ${tvNumber} assigned to ${date} game - date-specific scheduling`
+              }
+              
+              assignments.push({
+                gameId: game.gameId,
+                tvNumber: tvNumber,
+                date: gameDate,
+                timeSlot: timeSlot,
+                reasoning: reasoning
+              })
+              
+              console.log(`TV ${tvNumber}: Assigned ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} on ${date} (${timeSlot})`)
+            }
+          }
+        })
       })
       
+      console.log(`Generated ${assignments.length} date-aware assignments across ${sortedDates.length} dates`)
       aiData.tvAssignments = assignments
     }
     
