@@ -169,35 +169,38 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OpenAI API key not configured, using fallback logic')
-      // Use fallback logic without AI - distribute games with smart prioritization
-      const fallbackAssignments = gamesWithPriority.map((game, index) => {
-        const tvNumber = (index % userPreferences.numberOfTvs) + 1
+      // Use fallback logic without AI - ensure all TVs have content
+      const fallbackAssignments = []
+      for (let tvIndex = 0; tvIndex < userPreferences.numberOfTvs; tvIndex++) {
+        const gameIndex = tvIndex % gamesWithPriority.length
+        const game = gamesWithPriority[gameIndex]
+        const tvNumber = tvIndex + 1
+        
         let reasoning = `Distributed to TV ${tvNumber} of ${userPreferences.numberOfTvs}`
         
-        // Add context based on TV setup if available
-        if (userPreferences.tvSetupDescription) {
-          if (index < Math.ceil(gamesWithPriority.length / userPreferences.numberOfTvs)) {
-            reasoning += ` (high priority game placement)`
-          } else {
-            reasoning += ` (balanced distribution across setup)`
-          }
+        // Add context for duplicated content
+        if (tvIndex >= gamesWithPriority.length) {
+          reasoning += ` (duplicate content - no empty screens)`
+        } else if (userPreferences.tvSetupDescription) {
+          reasoning += ` (priority placement based on setup)`
         }
         reasoning += ` (OpenAI API key not configured)`
         
-        return {
+        fallbackAssignments.push({
           gameId: game.gameId,
           tvNumber,
           reasoning
-        }
-      })
+        })
+      }
 
-      const optimizedGames: OptimizedGame[] = gamesWithPriority.map(game => {
-        const assignment = fallbackAssignments.find(a => a.gameId === game.gameId)
+      // Create optimized games including duplicates
+      const optimizedGames: OptimizedGame[] = fallbackAssignments.map(assignment => {
+        const game = gamesWithPriority.find(g => g.gameId === assignment.gameId)!
         return {
           ...game,
-          tvAssignment: assignment?.tvNumber || 1,
+          tvAssignment: assignment.tvNumber,
           color: getColorFromPriority(game.priority),
-          reasoning: assignment?.reasoning || 'Default assignment'
+          reasoning: assignment.reasoning
         }
       })
 
@@ -224,11 +227,12 @@ export async function POST(request: NextRequest) {
     const prompt = `
 You are a sports viewing optimizer for a multi-TV environment. Given the following NBA games for the week and user preferences, please:
 
-1. DISTRIBUTE games across ALL ${userPreferences.numberOfTvs} TVs - DO NOT put all games on TV 1
-2. ANALYZE the TV setup description to understand which TVs are most prominent/visible
-3. ASSIGN highest priority games (user's favorite teams, playoffs) to the most prominent TVs
-4. Consider time conflicts - games at the same time should go on different TVs
-5. Use location context (main dining area vs bar vs kitchen) for optimal placement
+1. DISTRIBUTE games across ALL ${userPreferences.numberOfTvs} TVs - NEVER put all games on TV 1 or any single TV
+2. NO TV SHOULD EVER BE EMPTY - If games are available, EVERY TV must show content (repeat games if necessary)
+3. ANALYZE the TV setup description to understand which TVs are most prominent/visible
+4. ASSIGN highest priority games (user's favorite teams, playoffs) to the most prominent TVs
+5. Consider time conflicts - games at the same time should go on different TVs
+6. Use location context (main dining area vs bar vs kitchen) for optimal placement
 
 TV SETUP ANALYSIS:
 ${userPreferences.tvSetupDescription || 'No description provided'}
@@ -241,6 +245,10 @@ ASSIGNMENT STRATEGY:
 - Distribute remaining games to ensure all TVs have content
 
 CRITICAL: You have ${userPreferences.numberOfTvs} TVs available. Use TV numbers 1 through ${userPreferences.numberOfTvs}.
+
+EXAMPLE DISTRIBUTION (for ${userPreferences.numberOfTvs} TVs):
+${Array.from({length: Math.min(userPreferences.numberOfTvs, 5)}, (_, i) => `- TV ${i + 1}: Should get games assigned`).join('\n')}
+${userPreferences.numberOfTvs > 5 ? `... and so on for all ${userPreferences.numberOfTvs} TVs` : ''}
 
 User's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ') || 'None specified'}
 Number of TVs: ${userPreferences.numberOfTvs}
@@ -271,13 +279,15 @@ Please respond with a JSON object containing:
 }
 
 Focus on:
-- MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs})
+- MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs}) - EVERY TV MUST HAVE CONTENT
+- NO EMPTY SCREENS: In restaurant/bar settings, blank TVs lose customers - repeat games if needed to fill all screens
 - PROMINENCE-BASED ASSIGNMENT: Highest priority games go on most prominent/visible TVs
 - LOCATION INTELLIGENCE: Use TV setup description to understand viewing hierarchy
 - Simultaneous games MUST go on different TVs to avoid conflicts
 - Balance the number of games per TV while respecting prominence hierarchy
 - For restaurant/bar: Prime games on main dining area TVs, secondary on bar/waiting areas
 - Background TVs (kitchen, corners) get lower priority content but still engaging games
+- DUPLICATE WHEN NECESSARY: If fewer games than TVs, strategically duplicate games on less prominent screens
 - REASONING: Always explain TV choice based on game priority + TV prominence/location
 `;
 
@@ -328,16 +338,43 @@ Focus on:
       }))
     }
     
-    // Validate that games are actually distributed across TVs
-    const usedTvs = new Set(aiData.tvAssignments.map((a: any) => a.tvNumber))
-    if (usedTvs.size === 1 && userPreferences.numberOfTvs > 1) {
-      console.warn('AI assigned all games to one TV, redistributing')
-      aiData.tvAssignments = gamesWithPriority.map((game, index) => ({
-        gameId: game.gameId,
-        tvNumber: (index % userPreferences.numberOfTvs) + 1,
-        reasoning: `Redistributed to TV ${(index % userPreferences.numberOfTvs) + 1} for better coverage`
-      }))
+    // FORCE DISTRIBUTION ACROSS ALL TVS - No exceptions!
+    console.log('Original AI assignments:', aiData.tvAssignments)
+    
+    // Always force even distribution if we have more than 1 TV
+    if (userPreferences.numberOfTvs > 1) {
+      console.log(`FORCING distribution across all ${userPreferences.numberOfTvs} TVs`)
+      
+      // If we have fewer games than TVs, duplicate games to fill all screens
+      const assignments = []
+      for (let tvIndex = 0; tvIndex < userPreferences.numberOfTvs; tvIndex++) {
+        const gameIndex = tvIndex % gamesWithPriority.length
+        const game = gamesWithPriority[gameIndex]
+        const tvNumber = tvIndex + 1
+        
+        assignments.push({
+          gameId: game.gameId,
+          tvNumber: tvNumber,
+          reasoning: tvIndex < gamesWithPriority.length 
+            ? `Primary assignment to TV ${tvNumber} for ${userPreferences.numberOfTvs}-TV setup`
+            : `Duplicate content on TV ${tvNumber} - no empty screens in restaurant setting`
+        })
+      }
+      
+      aiData.tvAssignments = assignments
     }
+    
+    // Verify the forced distribution worked
+    const finalUsedTvs = new Set(aiData.tvAssignments.map((a: any) => a.tvNumber))
+    console.log(`Final distribution uses ${finalUsedTvs.size} TVs:`, Array.from(finalUsedTvs).sort())
+    
+    // Double-check by counting games per TV
+    const finalGameCount = new Map<number, number>()
+    aiData.tvAssignments.forEach((assignment: any) => {
+      const tv = assignment.tvNumber
+      finalGameCount.set(tv, (finalGameCount.get(tv) || 0) + 1)
+    })
+    console.log('Games per TV:', Object.fromEntries(finalGameCount))
     
     if (!aiData.recommendations) {
       aiData.recommendations = ['AI recommendations unavailable - using automatic assignments']
@@ -348,16 +385,19 @@ Focus on:
     }
 
     // Apply AI recommendations to games
-    const optimizedGames: OptimizedGame[] = gamesWithPriority.map(game => {
-      const assignment = aiData.tvAssignments?.find((a: { gameId: string; tvNumber: number; reasoning: string }) => a.gameId === game.gameId)
-      const tvNumber = assignment?.tvNumber || 1
-      const reasoning = assignment?.reasoning || 'Default assignment'
+    console.log('Final TV assignments after validation:', aiData.tvAssignments)
+    
+    // Create optimized games from assignments (may include duplicates)
+    const optimizedGames: OptimizedGame[] = aiData.tvAssignments.map((assignment: { gameId: string; tvNumber: number; reasoning: string }) => {
+      const game = gamesWithPriority.find(g => g.gameId === assignment.gameId)!
+      
+      console.log(`Game ${game.gameId} (${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}) assigned to TV ${assignment.tvNumber}`)
       
       return {
         ...game,
-        tvAssignment: tvNumber,
+        tvAssignment: assignment.tvNumber,
         color: getColorFromPriority(game.priority),
-        reasoning
+        reasoning: assignment.reasoning
       }
     })
 
@@ -365,7 +405,10 @@ Focus on:
     const tvSchedule: { [tvNumber: number]: OptimizedGame[] } = {}
     for (let i = 1; i <= userPreferences.numberOfTvs; i++) {
       tvSchedule[i] = optimizedGames.filter(game => game.tvAssignment === i)
+      console.log(`TV ${i}: ${tvSchedule[i].length} games assigned`)
     }
+    
+    console.log('Final TV schedule distribution:', Object.entries(tvSchedule).map(([tv, games]) => `TV ${tv}: ${games.length} games`).join(', '))
 
     const response: CalendarResponse = {
       optimizedGames,
