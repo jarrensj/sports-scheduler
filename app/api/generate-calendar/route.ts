@@ -17,6 +17,14 @@ interface Team {
   seed: number
 }
 
+interface TvAssignment {
+  gameId: string
+  tvNumber: number
+  date?: string
+  timeSlot?: string
+  reasoning: string
+}
+
 interface Game {
   gameId: string
   gameCode: string
@@ -478,22 +486,21 @@ Focus on:
       const gameAssignmentMap = new Map()
       assignments.forEach(assignment => {
         const game = mainGames.find(g => g.gameId === assignment.gameId)
-        const gameKey = `${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}`
-        if (!gameAssignmentMap.has(gameKey)) {
-          gameAssignmentMap.set(gameKey, [])
+        if (game) {
+          const gameKey = `${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}`
+          if (!gameAssignmentMap.has(gameKey)) {
+            gameAssignmentMap.set(gameKey, [])
+          }
+          gameAssignmentMap.get(gameKey).push(assignment.tvNumber)
         }
-        gameAssignmentMap.get(gameKey).push(assignment.tvNumber)
       })
       
       aiData.tvAssignments = assignments
     }
     
-    // Verify the forced distribution worked
-    const finalUsedTvs = new Set(aiData.tvAssignments.map((a: any) => a.tvNumber))
-    
     // Double-check by counting games per TV
     const finalGameCount = new Map<number, number>()
-    aiData.tvAssignments.forEach((assignment: any) => {
+    aiData.tvAssignments.forEach((assignment: TvAssignment) => {
       const tv = assignment.tvNumber
       finalGameCount.set(tv, (finalGameCount.get(tv) || 0) + 1)
     })
@@ -507,7 +514,7 @@ Focus on:
     }
     
     // Create optimized games from assignments (may include duplicates)
-    const optimizedGames: OptimizedGame[] = aiData.tvAssignments.map((assignment: { gameId: string; tvNumber: number; date?: string; timeSlot?: string; reasoning: string }) => {
+    const optimizedGames: OptimizedGame[] = aiData.tvAssignments.map((assignment: TvAssignment) => {
       const game = gamesWithPriority.find(g => g.gameId === assignment.gameId)!
       
       console.log(`Game ${game.gameId} (${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}) assigned to TV ${assignment.tvNumber} on ${assignment.date || 'unknown date'}`)
