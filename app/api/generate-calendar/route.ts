@@ -55,6 +55,7 @@ interface Game {
 interface UserPreferences {
   sportsInterests: string[]
   numberOfTvs: number
+  tvSetupDescription: string
   favoriteNbaTeams: string[]
   zipCode: string
 }
@@ -184,6 +185,7 @@ You are a sports viewing optimizer. Given the following NBA games for the week a
 
 User's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ') || 'None specified'}
 Number of TVs: ${userPreferences.numberOfTvs}
+TV Setup: ${userPreferences.tvSetupDescription || 'No description provided'}
 Week: ${formatWeekRange(weekData.weekStart, weekData.weekEnd)}
 
 Games (sorted by calculated priority):
@@ -215,6 +217,7 @@ Focus on:
 - Prioritizing user's favorite teams on primary TVs
 - Balancing workload across available TVs
 - Considering game importance and quality
+- Using the TV setup description to optimize assignments (e.g., main TV for important games, kitchen TV for background viewing)
 `;
 
     const completion = await openai.chat.completions.create({

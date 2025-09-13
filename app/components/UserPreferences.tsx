@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 interface UserPreferences {
   sportsInterests: string[]
   numberOfTvs: number
+  tvSetupDescription: string
   favoriteNbaTeams: string[]
   zipCode: string
 }
@@ -77,6 +78,7 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
   const [preferences, setPreferences] = useState<UserPreferences>({
     sportsInterests: [],
     numberOfTvs: 1,
+    tvSetupDescription: '',
     favoriteNbaTeams: [],
     zipCode: ''
   })
@@ -207,6 +209,24 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
               </p>
             </div>
 
+            {/* TV Setup Description */}
+            <div className="md:col-span-2">
+              <label htmlFor="tvSetupDescription" className="block text-sm font-medium text-gray-700 mb-2">
+                Describe Your TV Setup
+              </label>
+              <textarea
+                id="tvSetupDescription"
+                rows={3}
+                value={preferences.tvSetupDescription}
+                onChange={(e) => handlePreferenceChange({ tvSetupDescription: e.target.value })}
+                placeholder="e.g., 65' main TV in living room, 32' in kitchen, projector in basement. Main TV has surround sound..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Help AI optimize your viewing experience by describing your TV locations, sizes, audio setup, etc.
+              </p>
+            </div>
+
             {/* Favorite NBA Teams */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -253,18 +273,30 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end mt-6 pt-4 border-t border-gray-100">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-100 space-y-3 sm:space-y-0 sm:space-x-3">
+            {/* Subscription Button */}
+            <button
+              onClick={() => alert('Email subscription feature coming soon! 🚀')}
+              className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all font-medium shadow-md hover:shadow-lg transform hover:scale-105 flex items-center justify-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              <span>Subscribe to AI Weekly Schedule</span>
+            </button>
+
+            {/* Save Button */}
             <button
               onClick={() => setIsExpanded(false)}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
               Save Preferences
             </button>
           </div>
 
           {/* Current Preferences Summary */}
-          {(preferences.favoriteNbaTeams.length > 0 || preferences.zipCode || preferences.numberOfTvs > 1) && (
+          {(preferences.favoriteNbaTeams.length > 0 || preferences.zipCode || preferences.numberOfTvs > 1 || preferences.tvSetupDescription) && (
             <div className="mt-4 p-4 bg-gray-50 rounded-lg">
               <h4 className="text-sm font-medium text-gray-700 mb-2">Current Settings:</h4>
               <div className="flex flex-wrap gap-2">
@@ -288,6 +320,13 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
                 {preferences.zipCode && (
                   <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">
                     Zip: {preferences.zipCode}
+                  </span>
+                )}
+                {preferences.tvSetupDescription && (
+                  <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-sm">
+                    TV Setup: {preferences.tvSetupDescription.length > 50 ? 
+                      preferences.tvSetupDescription.substring(0, 47) + '...' : 
+                      preferences.tvSetupDescription}
                   </span>
                 )}
               </div>
