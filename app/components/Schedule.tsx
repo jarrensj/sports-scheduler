@@ -250,6 +250,118 @@ export default function Schedule() {
     }
   }
 
+  // Time-based positioning helpers
+  const parseGameTime = (gameStatusText: string) => {
+    // Parse time from formats like "12:00 pm ET", "10:30 pm ET", etc.
+    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (!timeMatch) return null
+    
+    let hours = parseInt(timeMatch[1])
+    const minutes = parseInt(timeMatch[2])
+    const period = timeMatch[3].toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    return hours * 60 + minutes // Return minutes from midnight
+  }
+
+  const getGamePosition = (game: Game, dayGames: Game[]) => {
+    const gameTime = parseGameTime(game.gameStatusText)
+    if (gameTime === null) return { top: 0, left: 0, width: 100 }
+    
+    // Define time range (6 AM to 2 AM next day = 20 hours)
+    const startTime = 6 * 60 // 6 AM in minutes
+    const endTime = 26 * 60 // 2 AM next day (26:00) in minutes
+    const totalRange = endTime - startTime
+    
+    // Adjust for times after midnight
+    const adjustedTime = gameTime < startTime ? gameTime + 24 * 60 : gameTime
+    
+    // Calculate vertical position (0-95% to leave room for card height)
+    const topPercent = Math.max(0, Math.min(95, ((adjustedTime - startTime) / totalRange) * 95))
+    
+    // Find all games with valid times for this day
+    const validGames = dayGames.filter(g => parseGameTime(g.gameStatusText) !== null)
+    
+    // Group games by time slots (within 2 hours of each other)
+    const timeSlots: Game[][] = []
+    validGames.forEach(g => {
+      const gTime = parseGameTime(g.gameStatusText)!
+      const adjustedGTime = gTime < startTime ? gTime + 24 * 60 : gTime
+      
+      let addedToSlot = false
+      for (const slot of timeSlots) {
+        const slotTime = parseGameTime(slot[0].gameStatusText)!
+        const adjustedSlotTime = slotTime < startTime ? slotTime + 24 * 60 : slotTime
+        
+        // If within 2 hours, add to this slot
+        if (Math.abs(adjustedGTime - adjustedSlotTime) <= 120) {
+          slot.push(g)
+          addedToSlot = true
+          break
+        }
+      }
+      
+      if (!addedToSlot) {
+        timeSlots.push([g])
+      }
+    })
+    
+    // Find which slot this game belongs to
+    const currentSlot = timeSlots.find(slot => slot.some(g => g.gameId === game.gameId))
+    if (!currentSlot) return { top: topPercent, left: 0, width: 100 }
+    
+    // Sort games in slot by time
+    currentSlot.sort((a, b) => {
+      const timeA = parseGameTime(a.gameStatusText)!
+      const timeB = parseGameTime(b.gameStatusText)!
+      const adjA = timeA < startTime ? timeA + 24 * 60 : timeA
+      const adjB = timeB < startTime ? timeB + 24 * 60 : timeB
+      return adjA - adjB
+    })
+    
+    // Calculate position within the slot
+    const slotSize = currentSlot.length
+    const gameIndexInSlot = currentSlot.findIndex(g => g.gameId === game.gameId)
+    
+    if (slotSize === 1) {
+      return { top: topPercent, left: 0, width: 100 }
+    }
+    
+    // For multiple games, distribute them evenly with some padding
+    const padding = 2 // 2% padding between cards
+    const availableWidth = 100 - (padding * (slotSize - 1))
+    const cardWidth = availableWidth / slotSize
+    const left = gameIndexInSlot * (cardWidth + padding)
+    
+    return { 
+      top: topPercent, 
+      left: Math.max(0, Math.min(left, 100 - cardWidth)), 
+      width: Math.max(25, Math.min(cardWidth, 100)) // Minimum 25% width, maximum 100%
+    }
+  }
+
+  // Generate time grid lines
+  const getTimeGridLines = () => {
+    const lines = []
+    // From 6 AM to 2 AM next day
+    for (let hour = 6; hour <= 26; hour += 2) {
+      const displayHour = hour > 24 ? hour - 24 : hour
+      const period = hour >= 12 && hour < 24 ? 'PM' : 'AM'
+      const displayHour12 = displayHour === 0 ? 12 : displayHour > 12 ? displayHour - 12 : displayHour
+      
+      const position = ((hour - 6) / 20) * 100
+      lines.push({
+        position,
+        label: `${displayHour12}${period}`
+      })
+    }
+    return lines
+  }
+
+  const timeGridLines = getTimeGridLines()
+
   // Pagination logic
   const getPaginatedData = () => {
     if (!scheduleData) return { paginatedDates: [], totalPages: 0 }
@@ -410,9 +522,9 @@ export default function Schedule() {
                   {/* Calendar Days */}
                   <div className="grid grid-cols-7">
                     {weeks[currentWeek].days.map((day, dayIndex) => (
-                      <div key={dayIndex} className="min-h-[200px] p-2 border-r border-b last:border-r-0">
+                      <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
                         {/* Date Header */}
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
                           <span className="text-sm font-medium text-gray-900">
                             {day.date.getDate()}
                           </span>
@@ -423,62 +535,93 @@ export default function Schedule() {
                           )}
                         </div>
 
-                        {/* Games for this day */}
-                        <div className="space-y-2">
-                          {day.games.map((game) => (
-                            <div key={game.gameId} className="bg-white border border-gray-200 rounded-lg p-3 text-xs hover:shadow-sm transition-all">
-                              {/* Game Time */}
-                              <div className="font-semibold text-blue-600 mb-2 text-center">
-                                {game.gameStatusText}
-                              </div>
-                              
-                              {/* Teams */}
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium text-gray-900">{game.awayTeam.teamTricode}</span>
-                                <span className="text-gray-500 font-medium">@</span>
-                                <span className="font-medium text-gray-900">{game.homeTeam.teamTricode}</span>
-                              </div>
-
-                              {/* Special Event Label */}
-                              {game.gameSubLabel && (
-                                <div className="text-center mb-2">
-                                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">
-                                    {game.gameSubLabel}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Broadcast Information */}
-                              <div className="border-t border-gray-100 pt-2">
-                                {getAllBroadcasters(game.broadcasters).length > 0 ? (
-                                  <div className="text-center">
-                                    <div className="flex items-center justify-center space-x-1 mb-1">
-                                      <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                      </svg>
-                                      <span className="text-green-700 font-medium">
-                                        {getAllBroadcasters(game.broadcasters)[0]}
-                                      </span>
-                                    </div>
-                                    {getAllBroadcasters(game.broadcasters).length > 1 && (
-                                      <div className="text-green-600 text-xs">
-                                        +{getAllBroadcasters(game.broadcasters).length - 1} more
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="text-center">
-                                    <div className="flex items-center justify-center space-x-1">
-                                      <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                      </svg>
-                                      <span className="text-gray-500 font-medium">TBD</span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                        {/* Time Grid Lines */}
+                        <div className="absolute inset-0 top-10 pointer-events-none">
+                          {timeGridLines.map((line, lineIndex) => (
+                            <div
+                              key={lineIndex}
+                              className="absolute w-full border-t border-gray-100"
+                              style={{ top: `${line.position}%` }}
+                            >
+                              <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
+                                {line.label}
+                              </span>
                             </div>
                           ))}
+                        </div>
+
+                        {/* Games positioned by time */}
+                        <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
+                          {day.games.map((game) => {
+                            const position = getGamePosition(game, day.games)
+                            return (
+                              <div
+                                key={game.gameId}
+                                className="absolute bg-white border border-gray-200 rounded-lg p-2 text-xs hover:shadow-md transition-all hover:z-20 cursor-pointer"
+                                style={{
+                                  top: `${position.top}%`,
+                                  left: `${Math.max(0, position.left)}%`,
+                                  width: `${Math.min(position.width, 100 - Math.max(0, position.left))}%`,
+                                  minHeight: '80px',
+                                  maxWidth: '100%'
+                                }}
+                              >
+                                {/* Game Time */}
+                                <div className="font-semibold text-blue-600 mb-1 text-center text-xs">
+                                  {game.gameStatusText}
+                                </div>
+                                
+                                {/* Teams */}
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-medium text-gray-900 text-xs">{game.awayTeam.teamTricode}</span>
+                                  <span className="text-gray-500 font-medium text-xs">@</span>
+                                  <span className="font-medium text-gray-900 text-xs">{game.homeTeam.teamTricode}</span>
+                                </div>
+
+                                {/* Special Event Label */}
+                                {game.gameSubLabel && (
+                                  <div className="text-center mb-1">
+                                    <span className="bg-orange-100 text-orange-700 px-1 py-0.5 rounded text-xs font-medium">
+                                      {game.gameSubLabel.length > 15 ? game.gameSubLabel.substring(0, 12) + '...' : game.gameSubLabel}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Broadcast Information */}
+                                <div className="border-t border-gray-100 pt-1 mt-1">
+                                  {getAllBroadcasters(game.broadcasters).length > 0 ? (
+                                    <div className="text-center">
+                                      <div className="flex items-center justify-center space-x-1">
+                                        <svg className="w-2 h-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        <span className="text-green-700 font-medium text-xs truncate">
+                                          {getAllBroadcasters(game.broadcasters)[0].length > 8 ? 
+                                            getAllBroadcasters(game.broadcasters)[0].substring(0, 8) + '...' : 
+                                            getAllBroadcasters(game.broadcasters)[0]
+                                          }
+                                        </span>
+                                      </div>
+                                      {getAllBroadcasters(game.broadcasters).length > 1 && (
+                                        <div className="text-green-600 text-xs">
+                                          +{getAllBroadcasters(game.broadcasters).length - 1}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center">
+                                      <div className="flex items-center justify-center space-x-1">
+                                        <svg className="w-2 h-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        <span className="text-gray-500 font-medium text-xs">TBD</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     ))}
