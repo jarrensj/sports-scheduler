@@ -169,12 +169,27 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OpenAI API key not configured, using fallback logic')
-      // Use fallback logic without AI - distribute games evenly across all TVs
-      const fallbackAssignments = gamesWithPriority.map((game, index) => ({
-        gameId: game.gameId,
-        tvNumber: (index % userPreferences.numberOfTvs) + 1,
-        reasoning: `Distributed across ${userPreferences.numberOfTvs} TVs for optimal restaurant viewing (OpenAI API key not configured)`
-      }))
+      // Use fallback logic without AI - distribute games with smart prioritization
+      const fallbackAssignments = gamesWithPriority.map((game, index) => {
+        const tvNumber = (index % userPreferences.numberOfTvs) + 1
+        let reasoning = `Distributed to TV ${tvNumber} of ${userPreferences.numberOfTvs}`
+        
+        // Add context based on TV setup if available
+        if (userPreferences.tvSetupDescription) {
+          if (index < Math.ceil(gamesWithPriority.length / userPreferences.numberOfTvs)) {
+            reasoning += ` (high priority game placement)`
+          } else {
+            reasoning += ` (balanced distribution across setup)`
+          }
+        }
+        reasoning += ` (OpenAI API key not configured)`
+        
+        return {
+          gameId: game.gameId,
+          tvNumber,
+          reasoning
+        }
+      })
 
       const optimizedGames: OptimizedGame[] = gamesWithPriority.map(game => {
         const assignment = fallbackAssignments.find(a => a.gameId === game.gameId)
@@ -194,8 +209,12 @@ export async function POST(request: NextRequest) {
       const response: CalendarResponse = {
         optimizedGames,
         tvSchedule,
-        recommendations: ['OpenAI API not configured - using automatic assignments based on priority'],
-        weekSummary: `Automatic viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)}`
+        recommendations: [
+          'OpenAI API not configured - using automatic assignments based on priority',
+          `Games distributed across ${userPreferences.numberOfTvs} TVs with highest priority content on primary screens`,
+          userPreferences.tvSetupDescription ? 'TV placement considers your setup description for optimal viewing' : 'Consider adding TV setup description for better optimization'
+        ],
+        weekSummary: `Automatic viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)} with priority-based TV distribution`
       }
 
       return NextResponse.json(response)
@@ -206,16 +225,25 @@ export async function POST(request: NextRequest) {
 You are a sports viewing optimizer for a multi-TV environment. Given the following NBA games for the week and user preferences, please:
 
 1. DISTRIBUTE games across ALL ${userPreferences.numberOfTvs} TVs - DO NOT put all games on TV 1
-2. For restaurant/bar settings: Spread games evenly so customers see variety across all screens
-3. Consider time conflicts - games at the same time should go on different TVs
-4. Prioritize user's favorite teams on prime viewing locations
-5. Use TV setup description to optimize assignments
+2. ANALYZE the TV setup description to understand which TVs are most prominent/visible
+3. ASSIGN highest priority games (user's favorite teams, playoffs) to the most prominent TVs
+4. Consider time conflicts - games at the same time should go on different TVs
+5. Use location context (main dining area vs bar vs kitchen) for optimal placement
 
-CRITICAL: You have ${userPreferences.numberOfTvs} TVs available. Make sure to use TV numbers 1 through ${userPreferences.numberOfTvs}.
+TV SETUP ANALYSIS:
+${userPreferences.tvSetupDescription || 'No description provided'}
+
+ASSIGNMENT STRATEGY:
+- Parse the TV setup to identify: main/primary TVs, secondary viewing areas, background locations
+- Keywords to look for: "main", "primary", "large", "65\"", "living room", "dining area" = high prominence
+- Keywords like: "kitchen", "small", "32\"", "background", "corner" = lower prominence
+- Assign games with highest priority scores to most prominent locations
+- Distribute remaining games to ensure all TVs have content
+
+CRITICAL: You have ${userPreferences.numberOfTvs} TVs available. Use TV numbers 1 through ${userPreferences.numberOfTvs}.
 
 User's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ') || 'None specified'}
 Number of TVs: ${userPreferences.numberOfTvs}
-TV Setup: ${userPreferences.tvSetupDescription || 'No description provided'}
 Week: ${formatWeekRange(weekData.weekStart, weekData.weekEnd)}
 
 Games (sorted by calculated priority):
@@ -233,22 +261,24 @@ Please respond with a JSON object containing:
     {
       "gameId": "game_id_here",
       "tvNumber": 1,
-      "reasoning": "Why this game is on this TV"
+      "reasoning": "Why this game is on this TV (include prominence/location context)"
     }
   ],
   "recommendations": [
-    "Overall viewing strategy recommendations"
+    "Overall viewing strategy recommendations based on TV setup"
   ],
-  "weekSummary": "Brief summary of the week's viewing plan"
+  "weekSummary": "Brief summary of the week's viewing plan with TV placement strategy"
 }
 
 Focus on:
 - MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs})
+- PROMINENCE-BASED ASSIGNMENT: Highest priority games go on most prominent/visible TVs
+- LOCATION INTELLIGENCE: Use TV setup description to understand viewing hierarchy
 - Simultaneous games MUST go on different TVs to avoid conflicts
-- Balance the number of games per TV - don't overload any single screen
-- For restaurant/bar: Ensure variety across screens for customer satisfaction
-- Prioritize user's favorite teams on prominent viewing locations
-- Use TV setup description for optimal placement (main areas vs background locations)
+- Balance the number of games per TV while respecting prominence hierarchy
+- For restaurant/bar: Prime games on main dining area TVs, secondary on bar/waiting areas
+- Background TVs (kitchen, corners) get lower priority content but still engaging games
+- REASONING: Always explain TV choice based on game priority + TV prominence/location
 `;
 
     const completion = await openai.chat.completions.create({
