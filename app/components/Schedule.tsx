@@ -107,6 +107,10 @@ export default function Schedule() {
   const [itemsPerPage] = useState(5) // Show 5 game dates per page
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
+  const [emailAddress, setEmailAddress] = useState('')
+  const [isEmailSending, setIsEmailSending] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -372,17 +376,98 @@ export default function Schedule() {
     setIsModalOpen(false)
   }
 
+  // Email handlers
+  const openEmailModal = () => {
+    setIsEmailModalOpen(true)
+    setEmailStatus(null)
+  }
+
+  const closeEmailModal = () => {
+    setIsEmailModalOpen(false)
+    setEmailAddress('')
+    setEmailStatus(null)
+  }
+
+  const sendWeeklyEmail = async () => {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      setEmailStatus({ type: 'error', message: 'Please enter a valid email address' })
+      return
+    }
+
+    if (!weeks[currentWeek]) {
+      setEmailStatus({ type: 'error', message: 'No week data available' })
+      return
+    }
+
+    setIsEmailSending(true)
+    setEmailStatus(null)
+
+    try {
+      // Collect all games for the current week
+      const weekGames: Game[] = []
+      weeks[currentWeek].days.forEach(day => {
+        weekGames.push(...day.games)
+      })
+
+      const weekData = {
+        weekStart: weeks[currentWeek].weekStart.toISOString(),
+        weekEnd: weeks[currentWeek].weekEnd.toISOString(),
+        games: weekGames
+      }
+
+      const response = await fetch('/api/email-schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          weekData,
+          recipientEmail: emailAddress
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send email')
+      }
+
+      setEmailStatus({ 
+        type: 'success', 
+        message: `Schedule for ${result.weekRange} sent successfully to ${emailAddress}!` 
+      })
+      
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        closeEmailModal()
+      }, 2000)
+
+    } catch (error) {
+      setEmailStatus({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to send email' 
+      })
+    } finally {
+      setIsEmailSending(false)
+    }
+  }
+
   // Close modal on escape key
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isModalOpen) {
-        closeGameModal()
+      if (event.key === 'Escape') {
+        if (isModalOpen) {
+          closeGameModal()
+        }
+        if (isEmailModalOpen) {
+          closeEmailModal()
+        }
       }
     }
 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [isModalOpen])
+  }, [isModalOpen, isEmailModalOpen])
 
   // Pagination logic
   const getPaginatedData = () => {
@@ -511,6 +596,15 @@ export default function Schedule() {
                     <p className="text-gray-500 text-sm">
                       Week {currentWeek + 1} of {totalWeeks}
                     </p>
+                    <button
+                      onClick={openEmailModal}
+                      className="mt-2 flex items-center space-x-2 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium mx-auto"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      <span>Email Week</span>
+                    </button>
                   </div>
 
                   <button
@@ -1044,6 +1138,97 @@ export default function Schedule() {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Email Modal */}
+        {isEmailModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">Email Weekly Schedule</h2>
+                <button
+                  onClick={closeEmailModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6">
+                <div className="mb-4">
+                  <p className="text-gray-600 mb-4">
+                    Send the schedule for <strong>{weeks[currentWeek] && formatWeekRange(weeks[currentWeek].weekStart, weeks[currentWeek].weekEnd)}</strong> to your email.
+                  </p>
+                  
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={emailAddress}
+                    onChange={(e) => setEmailAddress(e.target.value)}
+                    placeholder="Enter your email address"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    disabled={isEmailSending}
+                  />
+                </div>
+
+                {emailStatus && (
+                  <div className={`mb-4 p-3 rounded-lg ${
+                    emailStatus.type === 'success' 
+                      ? 'bg-green-50 text-green-800 border border-green-200' 
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    <div className="flex items-center space-x-2">
+                      {emailStatus.type === 'success' ? (
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                      <span className="text-sm">{emailStatus.message}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={closeEmailModal}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                    disabled={isEmailSending}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={sendWeeklyEmail}
+                    disabled={isEmailSending || !emailAddress}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                      isEmailSending || !emailAddress
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    {isEmailSending ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Sending...</span>
+                      </div>
+                    ) : (
+                      'Send Email'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
