@@ -124,19 +124,12 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
       style={cardStyle}
       onClick={() => onGameClick(game)}
     >
-      {/* Optimization indicators */}
-      {(tvAssignment || priority) && (
-        <div className="flex justify-between items-center mb-1">
-          {tvAssignment && (
-            <div className="bg-gray-800 text-white px-1 py-0.5 rounded text-xs font-bold">
-              TV{tvAssignment}
-            </div>
-          )}
-          {priority && (
-            <div className="bg-white bg-opacity-80 text-gray-800 px-1 py-0.5 rounded text-xs font-bold">
-              P{priority}
-            </div>
-          )}
+      {/* TV Assignment indicator */}
+      {tvAssignment && (
+        <div className="flex justify-start items-center mb-1">
+          <div className="bg-gray-800 text-white px-1 py-0.5 rounded text-xs font-bold">
+            TV{tvAssignment}
+          </div>
         </div>
       )}
 

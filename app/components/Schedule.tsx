@@ -905,19 +905,19 @@ export default function Schedule() {
 
                         {/* Priority Colors */}
                         <div>
-                          <h5 className="font-medium text-gray-700 mb-2">Priority Colors</h5>
+                          <h5 className="font-medium text-gray-700 mb-2">Game Priority Colors</h5>
                           <div className="space-y-1">
                             <div className="flex items-center space-x-2 text-sm">
                               <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(0, 165, 255)' }}></div>
-                              <span>High Priority (8-10)</span>
+                              <span>High Priority</span>
                             </div>
                             <div className="flex items-center space-x-2 text-sm">
                               <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(128, 210, 128)' }}></div>
-                              <span>Medium Priority (4-7)</span>
+                              <span>Medium Priority</span>
                             </div>
                             <div className="flex items-center space-x-2 text-sm">
                               <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(255, 255, 0)' }}></div>
-                              <span>Low Priority (1-3)</span>
+                              <span>Lower Priority</span>
                             </div>
                           </div>
                         </div>
@@ -1509,16 +1509,18 @@ export default function Schedule() {
                                       {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
                                     </div>
                                     <div className="text-sm text-gray-600">
-                                      {game.gameStatusText} • Priority: {game.priority}/10
+                                      {game.gameStatusText}
                                     </div>
                                   </div>
                                   <div className="text-right">
                                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: game.color }}></div>
                                   </div>
                                 </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {game.reasoning}
-                                </div>
+                                {game.reasoning && !game.reasoning.includes('duplicate') && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {game.reasoning}
+                                  </div>
+                                )}
                               </div>
                             ))}
                             {gamesList.length === 0 && (
@@ -1529,6 +1531,54 @@ export default function Schedule() {
                         )
                       })}
                     </div>
+
+                    {/* Multiple TV Broadcasts */}
+                    {(() => {
+                      // Find games that appear on multiple TVs
+                      const gameOccurrences = new Map<string, number[]>()
+                      Object.entries(generatedCalendar.tvSchedule).forEach(([tvNumber, games]) => {
+                        const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
+                        gamesList.forEach(game => {
+                          const key = `${game.awayTeam.teamTricode}-${game.homeTeam.teamTricode}-${game.gameStatusText}`
+                          if (!gameOccurrences.has(key)) {
+                            gameOccurrences.set(key, [])
+                          }
+                          gameOccurrences.get(key)!.push(parseInt(tvNumber))
+                        })
+                      })
+
+                      const duplicatedGames = Array.from(gameOccurrences.entries())
+                        .filter(([_, tvs]) => tvs.length > 1)
+                        .map(([gameKey, tvs]) => ({ gameKey, tvs: tvs.sort((a, b) => a - b) }))
+
+                      if (duplicatedGames.length === 0) return null
+
+                      return (
+                        <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                          <h4 className="font-semibold text-blue-900 mb-3">TVs Also Showing Same Broadcasts</h4>
+                          <div className="space-y-2">
+                            {duplicatedGames.map(({ gameKey, tvs }) => {
+                              const [awayTeam, homeTeam] = gameKey.split('-')
+                              return (
+                                <div key={gameKey} className="flex items-center justify-between text-sm">
+                                  <span className="text-blue-800 font-medium">
+                                    {awayTeam} @ {homeTeam}
+                                  </span>
+                                  <div className="flex items-center space-x-1">
+                                    <span className="text-blue-600">TVs:</span>
+                                    {tvs.map((tv, index) => (
+                                      <span key={tv} className="bg-blue-200 text-blue-800 px-2 py-1 rounded text-xs font-bold">
+                                        {tv}{index < tvs.length - 1 ? ',' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     {/* Recommendations */}
                     <div className="bg-blue-50 rounded-lg p-4 mb-6">
