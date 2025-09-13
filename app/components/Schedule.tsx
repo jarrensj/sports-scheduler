@@ -74,7 +74,7 @@ interface Game {
   broadcasters: Broadcasters
   homeTeam: Team
   awayTeam: Team
-  pointsLeaders: any[]
+  pointsLeaders: unknown[]
 }
 
 interface GameDate {
@@ -183,7 +183,7 @@ export default function Schedule() {
     if (allDates.length === 0) return []
     
     // Start from the first Sunday before or on the first game date
-    let currentDate = new Date(allDates[0])
+    const currentDate = new Date(allDates[0])
     currentDate.setDate(currentDate.getDate() - currentDate.getDay()) // Go to Sunday
     
     // End after the last game date
@@ -222,10 +222,6 @@ export default function Schedule() {
 
   const weeks = getWeeksFromSchedule()
   const totalWeeks = weeks.length
-
-  const goToWeek = (weekIndex: number) => {
-    setCurrentWeek(weekIndex)
-  }
 
   const goToPrevWeek = () => {
     if (currentWeek > 0) {
@@ -613,7 +609,7 @@ export default function Schedule() {
                 
                 <div className="p-6">
                   <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-                    {gameDate.games.map((game, gameIndex) => (
+                    {gameDate.games.map((game) => (
                       <div 
                         key={game.gameId} 
                         className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"

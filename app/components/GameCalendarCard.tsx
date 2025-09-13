@@ -69,7 +69,7 @@ interface Game {
   broadcasters: Broadcasters
   homeTeam: Team
   awayTeam: Team
-  pointsLeaders: any[]
+  pointsLeaders: unknown[]
 }
 
 interface GameCalendarCardProps {
