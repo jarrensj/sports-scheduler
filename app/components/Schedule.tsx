@@ -115,8 +115,19 @@ export default function Schedule() {
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateStatus, setGenerateStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-  const [generatedCalendar, setGeneratedCalendar] = useState<any>(null)
-  const [userPreferences, setUserPreferences] = useState<any>(null)
+  const [generatedCalendar, setGeneratedCalendar] = useState<{
+    optimizedGames: Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
+    tvSchedule: Record<number, Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>>
+    recommendations: string[]
+    weekSummary: string
+  } | null>(null)
+  const [userPreferences, setUserPreferences] = useState<{
+    sportsInterests: string[]
+    numberOfTvs: number
+    tvSetupDescription: string
+    favoriteNbaTeams: string[]
+    zipCode: string
+  } | null>(null)
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -459,7 +470,13 @@ export default function Schedule() {
   }
 
   // Handle user preferences changes
-  const handlePreferencesChange = (preferences: any) => {
+  const handlePreferencesChange = (preferences: {
+    sportsInterests: string[]
+    numberOfTvs: number
+    tvSetupDescription: string
+    favoriteNbaTeams: string[]
+    zipCode: string
+  }) => {
     setUserPreferences(preferences)
   }
 
@@ -845,7 +862,7 @@ export default function Schedule() {
                               {day.games.map((game) => {
                                 const position = getGamePosition(game, day.games)
                                 // Always use optimized data for this calendar
-                                const optimizedGame = generatedCalendar.optimizedGames?.find((og: any) => og.gameId === game.gameId)
+                                const optimizedGame = generatedCalendar.optimizedGames?.find(og => og.gameId === game.gameId)
                                 return (
                                   <GameCalendarCard
                                     key={game.gameId}
@@ -873,7 +890,7 @@ export default function Schedule() {
                           <h5 className="font-medium text-gray-700 mb-2">TV Assignments</h5>
                           <div className="space-y-1">
                             {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
-                              const gamesList = games as any[]
+                              const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
                               return (
                                 <div key={tvNumber} className="flex items-center space-x-2 text-sm">
                                   <div className="bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold">
@@ -1474,7 +1491,7 @@ export default function Schedule() {
                     {/* TV Schedule */}
                     <div className="grid gap-6 mb-6">
                       {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
-                        const gamesList = games as any[]
+                        const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
                         return (
                         <div key={tvNumber} className="bg-gray-50 rounded-lg p-4">
                           <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
@@ -1484,7 +1501,7 @@ export default function Schedule() {
                             TV {tvNumber} ({gamesList.length} games)
                           </h4>
                           <div className="space-y-2">
-                            {gamesList.map((game: any) => (
+                            {gamesList.map((game) => (
                               <div key={game.gameId} className="bg-white rounded-lg p-3 border-l-4" style={{ borderLeftColor: game.color }}>
                                 <div className="flex justify-between items-center">
                                   <div>

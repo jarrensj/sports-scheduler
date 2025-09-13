@@ -244,14 +244,14 @@ Focus on:
     let aiData
     try {
       aiData = JSON.parse(aiResponse)
-    } catch (e) {
+    } catch {
       console.error('Failed to parse AI response:', aiResponse)
       throw new Error('Invalid JSON response from AI')
     }
 
     // Apply AI recommendations to games
     const optimizedGames: OptimizedGame[] = gamesWithPriority.map(game => {
-      const assignment = aiData.tvAssignments?.find((a: any) => a.gameId === game.gameId)
+      const assignment = aiData.tvAssignments?.find((a: { gameId: string; tvNumber: number; reasoning: string }) => a.gameId === game.gameId)
       const tvNumber = assignment?.tvNumber || 1
       const reasoning = assignment?.reasoning || 'Default assignment'
       
