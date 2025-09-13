@@ -891,12 +891,13 @@ export default function Schedule() {
                           <div className="space-y-1">
                             {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
                               const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
+                              const gameNames = gamesList.map(g => `${g.awayTeam.teamTricode}@${g.homeTeam.teamTricode}`).join(', ')
                               return (
                                 <div key={tvNumber} className="flex items-center space-x-2 text-sm">
                                   <div className="bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold">
                                     TV{tvNumber}
                                   </div>
-                                  <span className="text-gray-600">{gamesList.length} games</span>
+                                  <span className="text-gray-600 text-xs">{gameNames || 'No games'}</span>
                                 </div>
                               )
                             })}

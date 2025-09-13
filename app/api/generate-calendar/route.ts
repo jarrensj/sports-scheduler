@@ -169,20 +169,23 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OpenAI API key not configured, using fallback logic')
-      // Use fallback logic without AI - ensure all TVs have content
+      // Use fallback logic without AI - create sequential schedules for all TVs
       const fallbackAssignments = []
-      for (let tvIndex = 0; tvIndex < userPreferences.numberOfTvs; tvIndex++) {
-        const gameIndex = tvIndex % gamesWithPriority.length
-        const game = gamesWithPriority[gameIndex]
-        const tvNumber = tvIndex + 1
+      
+      // Sort games by time to create proper sequences
+      const gamesByTime = [...gamesWithPriority].sort((a, b) => {
+        // Simple time comparison - in real app you'd parse actual times
+        return a.gameStatusText.localeCompare(b.gameStatusText)
+      })
+      
+      // Assign games to TVs with sequential scheduling
+      gamesByTime.forEach((game, gameIndex) => {
+        const tvNumber = (gameIndex % userPreferences.numberOfTvs) + 1
         
-        let reasoning = `Distributed to TV ${tvNumber} of ${userPreferences.numberOfTvs}`
+        let reasoning = `Scheduled on TV ${tvNumber} - sequential scheduling for continuous coverage`
         
-        // Add context for duplicated content
-        if (tvIndex >= gamesWithPriority.length) {
-          reasoning += ` (duplicate content - no empty screens)`
-        } else if (userPreferences.tvSetupDescription) {
-          reasoning += ` (priority placement based on setup)`
+        if (userPreferences.tvSetupDescription) {
+          reasoning += ` (optimized for your TV setup)`
         }
         reasoning += ` (OpenAI API key not configured)`
         
@@ -191,6 +194,21 @@ export async function POST(request: NextRequest) {
           tvNumber,
           reasoning
         })
+      })
+      
+      // If we still have fewer assignments than TVs, duplicate strategically
+      if (fallbackAssignments.length < userPreferences.numberOfTvs) {
+        for (let tvIndex = fallbackAssignments.length; tvIndex < userPreferences.numberOfTvs; tvIndex++) {
+          const gameIndex = tvIndex % gamesWithPriority.length
+          const game = gamesWithPriority[gameIndex]
+          const tvNumber = tvIndex + 1
+          
+          fallbackAssignments.push({
+            gameId: game.gameId,
+            tvNumber,
+            reasoning: `Duplicate coverage on TV ${tvNumber} - ensures no empty screens during peak hours`
+          })
+        }
       }
 
       // Create optimized games including duplicates
@@ -227,12 +245,28 @@ export async function POST(request: NextRequest) {
     const prompt = `
 You are a sports viewing optimizer for a multi-TV environment. Given the following NBA games for the week and user preferences, please:
 
-1. DISTRIBUTE games across ALL ${userPreferences.numberOfTvs} TVs - NEVER put all games on TV 1 or any single TV
-2. NO TV SHOULD EVER BE EMPTY - If games are available, EVERY TV must show content (repeat games if necessary)
-3. ANALYZE the TV setup description to understand which TVs are most prominent/visible
-4. ASSIGN highest priority games (user's favorite teams, playoffs) to the most prominent TVs
-5. Consider time conflicts - games at the same time should go on different TVs
-6. Use location context (main dining area vs bar vs kitchen) for optimal placement
+1. CREATE TIME-BASED TV SCHEDULES - Each TV gets a sequence of games throughout the day
+2. NBA GAME DURATION - Each game lasts 3.5 hours (including pre/post-game coverage)
+3. SEQUENTIAL TRANSITIONS - When a game ends, that TV immediately switches to the next available game
+4. SIMULTANEOUS GAME SPLITTING - If 2 games start at same time, split TVs between them (e.g., 5 TVs on Game A, 5 TVs on Game B)
+5. PREFERENCE-BASED SPLITTING - Use user's favorite teams to determine TV splits (60/40, 70/30, etc.)
+6. CONTINUOUS COVERAGE - Plan complete daily schedules so no TV is ever empty when games are available
+
+EXAMPLE SCHEDULING LOGIC:
+- 4:00 PM: 2 games start simultaneously
+  * Game A (user's favorite team): TVs 1,2,3,4,5,6 (60% of TVs)  
+  * Game B (regular game): TVs 7,8,9,10 (40% of TVs)
+- 7:30 PM: Games A & B end, next game starts at 8:00 PM
+  * All TVs (1-10) switch to the 8:00 PM game
+- 11:30 PM: 8:00 PM game ends, next game starts at 12:00 AM
+  * All TVs (1-10) switch to the 12:00 AM game
+
+CRITICAL REQUIREMENTS:
+- EVERY TV must have a complete schedule for the day
+- When games end (after 3.5 hours), TVs transition to next available game
+- Split TVs intelligently when multiple games start simultaneously
+- Use user preferences to weight TV assignments (favorite teams get more TVs)
+- NO TV should ever be empty if games are available
 
 TV SETUP ANALYSIS:
 ${userPreferences.tvSetupDescription || 'No description provided'}
@@ -242,13 +276,21 @@ ASSIGNMENT STRATEGY:
 - Keywords to look for: "main", "primary", "large", "65\"", "living room", "dining area" = high prominence
 - Keywords like: "kitchen", "small", "32\"", "background", "corner" = lower prominence
 - Assign games with highest priority scores to most prominent locations
-- Distribute remaining games to ensure all TVs have content
+- CREATE SEQUENTIAL SCHEDULES: When Game A ends at 7:30 PM, assign Game B starting at 8:00 PM to same TV
+- CONTINUOUS COVERAGE: Each TV should show games from early afternoon through late night
+- HANDOFF PLANNING: Coordinate game transitions so TVs never go dark between games
 
 CRITICAL: You have ${userPreferences.numberOfTvs} TVs available. Use TV numbers 1 through ${userPreferences.numberOfTvs}.
 
 EXAMPLE DISTRIBUTION (for ${userPreferences.numberOfTvs} TVs):
 ${Array.from({length: Math.min(userPreferences.numberOfTvs, 5)}, (_, i) => `- TV ${i + 1}: Should get games assigned`).join('\n')}
 ${userPreferences.numberOfTvs > 5 ? `... and so on for all ${userPreferences.numberOfTvs} TVs` : ''}
+
+MULTIPLE TVS PER GAME STRATEGY:
+If there are fewer games than TVs (e.g., 2 games but 10 TVs):
+- Game 1 should appear on multiple TVs (e.g., TVs 1, 3, 5, 7, 9)  
+- Game 2 should appear on remaining TVs (e.g., TVs 2, 4, 6, 8, 10)
+- This ensures ALL TVs have content and customers can choose their preferred viewing angle
 
 User's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ') || 'None specified'}
 Number of TVs: ${userPreferences.numberOfTvs}
@@ -269,26 +311,37 @@ Please respond with a JSON object containing:
     {
       "gameId": "game_id_here",
       "tvNumber": 1,
-      "reasoning": "Why this game is on this TV (include prominence/location context)"
+      "timeSlot": "4:00-7:30 PM",
+      "reasoning": "Why this game is on this TV at this time (include transitions)"
+    },
+    {
+      "gameId": "next_game_id",
+      "tvNumber": 1,
+      "timeSlot": "8:00-11:30 PM", 
+      "reasoning": "Sequential assignment after previous game ends"
     }
   ],
   "recommendations": [
-    "Overall viewing strategy recommendations based on TV setup"
+    "Daily scheduling strategy with game transitions explained"
   ],
-  "weekSummary": "Brief summary of the week's viewing plan with TV placement strategy"
+  "weekSummary": "Brief summary of daily TV schedules with transition timing"
 }
 
 Focus on:
 - MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs}) - EVERY TV MUST HAVE CONTENT
-- NO EMPTY SCREENS: In restaurant/bar settings, blank TVs lose customers - repeat games if needed to fill all screens
+- MULTIPLE TVS PER GAME: When fewer games than TVs (2 games, 10 TVs), assign multiple TVs to each game for complete coverage
+- SEQUENTIAL SCHEDULING: Each TV should show multiple games throughout the day (Game 1: 1:00-4:30 PM, Game 2: 5:00-8:30 PM, Game 3: 9:00-12:30 AM, etc.)
+- 3.5-HOUR GAME DURATION: NBA games last ~3.5 hours including pre/post-game, plan TV transitions accordingly
+- You can start switching the TV to tune into the game as early as 1 hour before the game starts if it is not busy and there are no other games on or if it's a game where the user's preferred team is playing.
+- NO EMPTY SCREENS: In restaurant/bar settings, blank TVs lose customers - plan continuous coverage
+- AUTOMATIC TRANSITIONS: When one game ends (~3.5 hrs later), immediately assign the next available game to that TV
 - PROMINENCE-BASED ASSIGNMENT: Highest priority games go on most prominent/visible TVs
 - LOCATION INTELLIGENCE: Use TV setup description to understand viewing hierarchy
-- Simultaneous games MUST go on different TVs to avoid conflicts
+- TIME CONFLICT RESOLUTION: Games at the same time should go on different TVs
 - Balance the number of games per TV while respecting prominence hierarchy
 - For restaurant/bar: Prime games on main dining area TVs, secondary on bar/waiting areas
 - Background TVs (kitchen, corners) get lower priority content but still engaging games
-- DUPLICATE WHEN NECESSARY: If fewer games than TVs, strategically duplicate games on less prominent screens
-- REASONING: Always explain TV choice based on game priority + TV prominence/location
+- REASONING: Always explain TV choice based on game priority + TV prominence/location + time scheduling
 `;
 
     const completion = await openai.chat.completions.create({
@@ -343,30 +396,65 @@ Focus on:
     
     // Always force even distribution if we have more than 1 TV
     if (userPreferences.numberOfTvs > 1) {
-      console.log(`FORCING distribution across all ${userPreferences.numberOfTvs} TVs`)
       
-      // If we have fewer games than TVs, duplicate games to fill all screens
+      // Create time-based assignments for ALL TVs
       const assignments = []
+      
+      // Sort games by time for proper sequencing
+      const gamesByTime = [...gamesWithPriority].sort((a, b) => {
+        return a.gameStatusText.localeCompare(b.gameStatusText)
+      })
+      
+      console.log(`Games sorted by time:`, gamesByTime.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
+      
+      // RESTAURANT LOGIC: Focus on main games of the day, not all week games
+      // For restaurant: Limit to top games and distribute those across multiple TVs
+      const mainGames = gamesByTime.slice(0, Math.min(4, gamesByTime.length)) // Max 4 main games per day
+      console.log(`Main games for restaurant distribution:`, mainGames.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
+      
+      // Assign games to ALL TVs - distribute main games across multiple TVs
       for (let tvIndex = 0; tvIndex < userPreferences.numberOfTvs; tvIndex++) {
-        const gameIndex = tvIndex % gamesWithPriority.length
-        const game = gamesWithPriority[gameIndex]
         const tvNumber = tvIndex + 1
+        const gameIndex = tvIndex % mainGames.length
+        const game = mainGames[gameIndex]
+        
+        // Calculate how many TVs will show this game
+        const tvsPerGame = Math.ceil(userPreferences.numberOfTvs / mainGames.length)
+        const gameAssignmentNumber = Math.floor(tvIndex / mainGames.length) + 1
+        
+        console.log(`TV ${tvNumber}: Assigning main game index ${gameIndex} (${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}) - ${gameAssignmentNumber} of ${tvsPerGame} TVs for this game`)
+        
+        let reasoning
+        if (mainGames.length < userPreferences.numberOfTvs) {
+          // Multiple TVs per game scenario (e.g., 2 games, 10 TVs)
+          reasoning = `TV ${tvNumber} showing this game (${gameAssignmentNumber} of ${tvsPerGame} TVs for this matchup) - restaurant multi-screen strategy`
+        } else {
+          // Enough games for each TV
+          reasoning = `Primary assignment for TV ${tvNumber} - sequential scheduling planned`
+        }
         
         assignments.push({
           gameId: game.gameId,
           tvNumber: tvNumber,
-          reasoning: tvIndex < gamesWithPriority.length 
-            ? `Primary assignment to TV ${tvNumber} for ${userPreferences.numberOfTvs}-TV setup`
-            : `Duplicate content on TV ${tvNumber} - no empty screens in restaurant setting`
+          reasoning: reasoning
         })
-      }
+      }      
+      // Group assignments by game to show distribution
+      const gameAssignmentMap = new Map()
+      assignments.forEach(assignment => {
+        const game = mainGames.find(g => g.gameId === assignment.gameId)
+        const gameKey = `${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}`
+        if (!gameAssignmentMap.has(gameKey)) {
+          gameAssignmentMap.set(gameKey, [])
+        }
+        gameAssignmentMap.get(gameKey).push(assignment.tvNumber)
+      })
       
       aiData.tvAssignments = assignments
     }
     
     // Verify the forced distribution worked
     const finalUsedTvs = new Set(aiData.tvAssignments.map((a: any) => a.tvNumber))
-    console.log(`Final distribution uses ${finalUsedTvs.size} TVs:`, Array.from(finalUsedTvs).sort())
     
     // Double-check by counting games per TV
     const finalGameCount = new Map<number, number>()
@@ -374,7 +462,6 @@ Focus on:
       const tv = assignment.tvNumber
       finalGameCount.set(tv, (finalGameCount.get(tv) || 0) + 1)
     })
-    console.log('Games per TV:', Object.fromEntries(finalGameCount))
     
     if (!aiData.recommendations) {
       aiData.recommendations = ['AI recommendations unavailable - using automatic assignments']
@@ -383,9 +470,6 @@ Focus on:
     if (!aiData.weekSummary) {
       aiData.weekSummary = `Viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)} with automatic TV assignments`
     }
-
-    // Apply AI recommendations to games
-    console.log('Final TV assignments after validation:', aiData.tvAssignments)
     
     // Create optimized games from assignments (may include duplicates)
     const optimizedGames: OptimizedGame[] = aiData.tvAssignments.map((assignment: { gameId: string; tvNumber: number; reasoning: string }) => {
@@ -405,10 +489,15 @@ Focus on:
     const tvSchedule: { [tvNumber: number]: OptimizedGame[] } = {}
     for (let i = 1; i <= userPreferences.numberOfTvs; i++) {
       tvSchedule[i] = optimizedGames.filter(game => game.tvAssignment === i)
-      console.log(`TV ${i}: ${tvSchedule[i].length} games assigned`)
     }
     
-    console.log('Final TV schedule distribution:', Object.entries(tvSchedule).map(([tv, games]) => `TV ${tv}: ${games.length} games`).join(', '))
+    // Check for empty TVs
+    const emptyTvs = Object.entries(tvSchedule).filter(([_, games]) => games.length === 0).map(([tv]) => tv)
+    if (emptyTvs.length > 0) {
+      console.error(`WARNING: ${emptyTvs.length} TVs have NO games assigned: ${emptyTvs.join(', ')}`)
+    } else {
+      console.log(`SUCCESS: All ${userPreferences.numberOfTvs} TVs have game assignments!`)
+    }
 
     const response: CalendarResponse = {
       optimizedGames,
