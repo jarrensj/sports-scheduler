@@ -104,6 +104,8 @@ export default function Schedule() {
   const [currentWeek, setCurrentWeek] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(5) // Show 5 game dates per page
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -362,6 +364,29 @@ export default function Schedule() {
 
   const timeGridLines = getTimeGridLines()
 
+  // Modal handlers
+  const openGameModal = (game: Game) => {
+    setSelectedGame(game)
+    setIsModalOpen(true)
+  }
+
+  const closeGameModal = () => {
+    setSelectedGame(null)
+    setIsModalOpen(false)
+  }
+
+  // Close modal on escape key
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isModalOpen) {
+        closeGameModal()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isModalOpen])
+
   // Pagination logic
   const getPaginatedData = () => {
     if (!scheduleData) return { paginatedDates: [], totalPages: 0 }
@@ -557,7 +582,7 @@ export default function Schedule() {
                             return (
                               <div
                                 key={game.gameId}
-                                className="absolute bg-white border border-gray-200 rounded-lg p-2 text-xs hover:shadow-md transition-all hover:z-20 cursor-pointer"
+                                className="absolute bg-white border border-gray-200 rounded-lg p-2 text-xs hover:shadow-md transition-all hover:z-20 cursor-pointer hover:border-blue-300"
                                 style={{
                                   top: `${position.top}%`,
                                   left: `${Math.max(0, position.left)}%`,
@@ -565,6 +590,7 @@ export default function Schedule() {
                                   minHeight: '80px',
                                   maxWidth: '100%'
                                 }}
+                                onClick={() => openGameModal(game)}
                               >
                                 {/* Game Time */}
                                 <div className="font-semibold text-blue-600 mb-1 text-center text-xs">
@@ -647,7 +673,11 @@ export default function Schedule() {
                 <div className="p-6">
                   <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
                     {gameDate.games.map((game, gameIndex) => (
-                      <div key={game.gameId} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div 
+                        key={game.gameId} 
+                        className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"
+                        onClick={() => openGameModal(game)}
+                      >
                         {/* Game Header */}
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex items-center space-x-2">
@@ -851,6 +881,234 @@ export default function Schedule() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Game Details Modal */}
+        {isModalOpen && selectedGame && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900">Game Details</h2>
+                <button
+                  onClick={closeGameModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6">
+                {/* Game Status and Time */}
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center space-x-3 bg-blue-50 px-4 py-2 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {selectedGame.gameStatusText}
+                    </div>
+                    <div className="text-gray-600">
+                      {formatDate(selectedGame.gameDateEst)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Teams Section */}
+                <div className="bg-gray-50 rounded-lg p-6 mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">Matchup</h3>
+                  <div className="flex items-center justify-between">
+                    {/* Away Team */}
+                    <div className="text-center flex-1">
+                      <div className="text-sm text-gray-500 mb-1">Away</div>
+                      <div className="text-xl font-bold text-gray-900 mb-1">
+                        {selectedGame.awayTeam.teamCity} {selectedGame.awayTeam.teamName}
+                      </div>
+                      <div className="bg-gray-200 text-gray-700 px-3 py-1 rounded font-mono text-sm">
+                        {selectedGame.awayTeam.teamTricode}
+                      </div>
+                      <div className="text-sm text-gray-600 mt-2">
+                        {selectedGame.awayTeam.wins}-{selectedGame.awayTeam.losses}
+                      </div>
+                    </div>
+
+                    {/* VS */}
+                    <div className="px-6">
+                      <div className="text-2xl font-bold text-gray-400">VS</div>
+                    </div>
+
+                    {/* Home Team */}
+                    <div className="text-center flex-1">
+                      <div className="text-sm text-gray-500 mb-1">Home</div>
+                      <div className="text-xl font-bold text-gray-900 mb-1">
+                        {selectedGame.homeTeam.teamCity} {selectedGame.homeTeam.teamName}
+                      </div>
+                      <div className="bg-gray-200 text-gray-700 px-3 py-1 rounded font-mono text-sm">
+                        {selectedGame.homeTeam.teamTricode}
+                      </div>
+                      <div className="text-sm text-gray-600 mt-2">
+                        {selectedGame.homeTeam.wins}-{selectedGame.homeTeam.losses}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Game Info Grid */}
+                <div className="grid md:grid-cols-2 gap-6 mb-6">
+                  {/* Venue Information */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Venue
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="font-medium text-gray-900">{selectedGame.arenaName}</div>
+                      <div className="text-gray-600">
+                        {selectedGame.arenaCity}
+                        {selectedGame.arenaState && `, ${selectedGame.arenaState}`}
+                      </div>
+                      {selectedGame.isNeutral && (
+                        <div className="inline-flex items-center bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm">
+                          Neutral Site
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Game Type */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Game Type
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="inline-flex items-center bg-orange-100 text-orange-800 px-3 py-1 rounded font-medium">
+                        {selectedGame.gameLabel}
+                      </div>
+                      {selectedGame.gameSubLabel && (
+                        <div className="text-gray-600 font-medium">
+                          {selectedGame.gameSubLabel}
+                        </div>
+                      )}
+                      {selectedGame.seriesText && (
+                        <div className="text-gray-600 text-sm">
+                          {selectedGame.seriesText}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Broadcast Information */}
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Broadcast Information
+                  </h4>
+                  
+                  {getAllBroadcasters(selectedGame.broadcasters).length > 0 ? (
+                    <div className="grid gap-3">
+                      {/* National Broadcasters */}
+                      {selectedGame.broadcasters.nationalBroadcasters.length > 0 && (
+                        <div>
+                          <div className="text-sm font-medium text-gray-700 mb-1">National TV</div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedGame.broadcasters.nationalBroadcasters.map((broadcaster, idx) => (
+                              <span key={idx} className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">
+                                {broadcaster.broadcasterDisplay}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Home TV Broadcasters */}
+                      {selectedGame.broadcasters.homeTvBroadcasters.length > 0 && (
+                        <div>
+                          <div className="text-sm font-medium text-gray-700 mb-1">Home TV</div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedGame.broadcasters.homeTvBroadcasters.map((broadcaster, idx) => (
+                              <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm font-medium">
+                                {broadcaster.broadcasterDisplay}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Home Radio Broadcasters */}
+                      {selectedGame.broadcasters.homeRadioBroadcasters.length > 0 && (
+                        <div>
+                          <div className="text-sm font-medium text-gray-700 mb-1">Home Radio</div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedGame.broadcasters.homeRadioBroadcasters.map((broadcaster, idx) => (
+                              <span key={idx} className="bg-purple-100 text-purple-800 px-3 py-1 rounded text-sm font-medium">
+                                {broadcaster.broadcasterDisplay}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Away TV Broadcasters */}
+                      {selectedGame.broadcasters.awayTvBroadcasters.length > 0 && (
+                        <div>
+                          <div className="text-sm font-medium text-gray-700 mb-1">Away TV</div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedGame.broadcasters.awayTvBroadcasters.map((broadcaster, idx) => (
+                              <span key={idx} className="bg-orange-100 text-orange-800 px-3 py-1 rounded text-sm font-medium">
+                                {broadcaster.broadcasterDisplay}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Away Radio Broadcasters */}
+                      {selectedGame.broadcasters.awayRadioBroadcasters.length > 0 && (
+                        <div>
+                          <div className="text-sm font-medium text-gray-700 mb-1">Away Radio</div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedGame.broadcasters.awayRadioBroadcasters.map((broadcaster, idx) => (
+                              <span key={idx} className="bg-red-100 text-red-800 px-3 py-1 rounded text-sm font-medium">
+                                {broadcaster.broadcasterDisplay}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      <div className="flex items-center justify-center space-x-2">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <span>Broadcast information to be determined</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex justify-end p-6 border-t border-gray-200">
+                <button
+                  onClick={closeGameModal}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
