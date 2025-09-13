@@ -76,9 +76,12 @@ interface GameCalendarCardProps {
   game: Game
   position: { top: number; left: number; width: number }
   onGameClick: (game: Game) => void
+  optimizedColor?: string
+  tvAssignment?: number
+  priority?: number
 }
 
-export function GameCalendarCard({ game, position, onGameClick }: GameCalendarCardProps) {
+export function GameCalendarCard({ game, position, onGameClick, optimizedColor, tvAssignment, priority }: GameCalendarCardProps) {
   const getAllBroadcasters = (broadcasters: Broadcasters) => {
     const allBroadcasters = [
       ...broadcasters.nationalBroadcasters,
@@ -93,20 +96,52 @@ export function GameCalendarCard({ game, position, onGameClick }: GameCalendarCa
       .map(broadcaster => broadcaster.broadcasterDisplay)
   }
 
+  // Generate dynamic styles based on optimization
+  const cardStyle = optimizedColor ? {
+    top: `${position.top}%`,
+    left: `${Math.max(0, position.left)}%`,
+    width: `${Math.min(position.width, 100 - Math.max(0, position.left))}%`,
+    minHeight: '80px',
+    maxWidth: '100%',
+    backgroundColor: optimizedColor,
+    borderColor: optimizedColor,
+    borderWidth: '3px'
+  } : {
+    top: `${position.top}%`,
+    left: `${Math.max(0, position.left)}%`,
+    width: `${Math.min(position.width, 100 - Math.max(0, position.left))}%`,
+    minHeight: '80px',
+    maxWidth: '100%'
+  }
+
+  const cardClassName = optimizedColor ? 
+    "absolute border-2 rounded-lg p-2 text-xs hover:shadow-lg transition-all hover:z-20 cursor-pointer transform hover:scale-105" :
+    "absolute bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+
   return (
     <div
-      className="absolute bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
-      style={{
-        top: `${position.top}%`,
-        left: `${Math.max(0, position.left)}%`,
-        width: `${Math.min(position.width, 100 - Math.max(0, position.left))}%`,
-        minHeight: '80px',
-        maxWidth: '100%'
-      }}
+      className={cardClassName}
+      style={cardStyle}
       onClick={() => onGameClick(game)}
     >
+      {/* Optimization indicators */}
+      {(tvAssignment || priority) && (
+        <div className="flex justify-between items-center mb-1">
+          {tvAssignment && (
+            <div className="bg-gray-800 text-white px-1 py-0.5 rounded text-xs font-bold">
+              TV{tvAssignment}
+            </div>
+          )}
+          {priority && (
+            <div className="bg-white bg-opacity-80 text-gray-800 px-1 py-0.5 rounded text-xs font-bold">
+              P{priority}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Game Time */}
-      <div className="font-bold text-blue-700 mb-1 text-center text-xs">
+      <div className={`font-bold mb-1 text-center text-xs ${optimizedColor ? 'text-gray-800' : 'text-blue-700'}`}>
         {game.gameStatusText}
       </div>
       

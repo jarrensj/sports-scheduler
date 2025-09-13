@@ -112,6 +112,11 @@ export default function Schedule() {
   const [emailAddress, setEmailAddress] = useState('')
   const [isEmailSending, setIsEmailSending] = useState(false)
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generateStatus, setGenerateStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [generatedCalendar, setGeneratedCalendar] = useState<any>(null)
+  const [userPreferences, setUserPreferences] = useState<any>(null)
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -453,6 +458,82 @@ export default function Schedule() {
     }
   }
 
+  // Handle user preferences changes
+  const handlePreferencesChange = (preferences: any) => {
+    setUserPreferences(preferences)
+  }
+
+  // Generate calendar handlers
+  const openGenerateModal = () => {
+    setIsGenerateModalOpen(true)
+    setGenerateStatus(null)
+  }
+
+  const closeGenerateModal = () => {
+    setIsGenerateModalOpen(false)
+    setGenerateStatus(null)
+  }
+
+  const generateOptimizedCalendar = async () => {
+    if (!weeks[currentWeek]) {
+      setGenerateStatus({ type: 'error', message: 'No week data available' })
+      return
+    }
+
+    if (!userPreferences) {
+      setGenerateStatus({ type: 'error', message: 'Please set your preferences first' })
+      return
+    }
+
+    setIsGenerating(true)
+    setGenerateStatus(null)
+
+    try {
+      // Collect all games for the current week
+      const weekGames: Game[] = []
+      weeks[currentWeek].days.forEach(day => {
+        weekGames.push(...day.games)
+      })
+
+      const weekData = {
+        weekStart: weeks[currentWeek].weekStart.toISOString(),
+        weekEnd: weeks[currentWeek].weekEnd.toISOString(),
+        games: weekGames
+      }
+
+      const response = await fetch('/api/generate-calendar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          weekData,
+          userPreferences
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to generate calendar')
+      }
+
+      setGeneratedCalendar(result)
+      setGenerateStatus({ 
+        type: 'success', 
+        message: 'Optimized calendar generated successfully!' 
+      })
+
+    } catch (error) {
+      setGenerateStatus({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to generate calendar' 
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   // Close modal on escape key
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -463,12 +544,15 @@ export default function Schedule() {
         if (isEmailModalOpen) {
           closeEmailModal()
         }
+        if (isGenerateModalOpen) {
+          closeGenerateModal()
+        }
       }
     }
 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [isModalOpen, isEmailModalOpen])
+  }, [isModalOpen, isEmailModalOpen, isGenerateModalOpen])
 
   // Pagination logic
   const getPaginatedData = () => {
@@ -543,7 +627,7 @@ export default function Schedule() {
         </header>
 
         {/* User Preferences Section */}
-        <UserPreferences />
+        <UserPreferences onPreferencesChange={handlePreferencesChange} />
           
         {/* View Mode Toggle */}
         <div className="flex justify-center mb-6">
@@ -600,15 +684,26 @@ export default function Schedule() {
                     <p className="text-gray-500 text-sm">
                       Week {currentWeek + 1} of {totalWeeks}
                     </p>
-                    <button
-                      onClick={openEmailModal}
-                      className="mt-2 flex items-center space-x-2 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium mx-auto"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <span>Email Week</span>
-                    </button>
+                    <div className="mt-2 flex items-center justify-center space-x-2">
+                      <button
+                        onClick={openGenerateModal}
+                        className="flex items-center space-x-2 px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span>Generate</span>
+                      </button>
+                      <button
+                        onClick={openEmailModal}
+                        className="flex items-center space-x-2 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span>Email Week</span>
+                      </button>
+                    </div>
                   </div>
 
                   <button
@@ -688,6 +783,131 @@ export default function Schedule() {
                     ))}
                   </div>
                 </div>
+
+                {/* Generated Calendar Section */}
+                {generatedCalendar && (
+                  <div className="mt-8">
+                    <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-t-lg">
+                      <h3 className="text-xl font-semibold flex items-center">
+                        <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        AI-Optimized Calendar
+                      </h3>
+                      <p className="text-purple-100 text-sm mt-1">{generatedCalendar.weekSummary}</p>
+                    </div>
+
+                    {/* Optimized Calendar Grid */}
+                    <div className="bg-white rounded-b-lg shadow-sm overflow-hidden">
+                      {/* Day Headers */}
+                      <div className="grid grid-cols-7 bg-purple-50 border-b">
+                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                          <div key={day} className="p-4 text-center font-semibold text-purple-700 border-r last:border-r-0">
+                            <div className="hidden sm:block">{day}</div>
+                            <div className="sm:hidden">{day.slice(0, 3)}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Calendar Days with Optimized Colors */}
+                      <div className="grid grid-cols-7">
+                        {weeks[currentWeek].days.map((day, dayIndex) => (
+                          <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
+                            {/* Date Header */}
+                            <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
+                              <span className="text-sm font-medium text-gray-900">
+                                {day.date.getDate()}
+                              </span>
+                              {day.games.length > 0 && (
+                                <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                                  {day.games.length}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Time Grid Lines */}
+                            <div className="absolute inset-0 top-10 pointer-events-none">
+                              {timeGridLines.map((line, lineIndex) => (
+                                <div
+                                  key={lineIndex}
+                                  className="absolute w-full border-t border-gray-100"
+                                  style={{ top: `${line.position}%` }}
+                                >
+                                  <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
+                                    {line.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Games positioned by time with optimization */}
+                            <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
+                              {day.games.map((game) => {
+                                const position = getGamePosition(game, day.games)
+                                // Always use optimized data for this calendar
+                                const optimizedGame = generatedCalendar.optimizedGames?.find((og: any) => og.gameId === game.gameId)
+                                return (
+                                  <GameCalendarCard
+                                    key={game.gameId}
+                                    game={game}
+                                    position={position}
+                                    onGameClick={openGameModal}
+                                    optimizedColor={optimizedGame?.color || 'rgb(200, 200, 200)'}
+                                    tvAssignment={optimizedGame?.tvAssignment || 1}
+                                    priority={optimizedGame?.priority || 5}
+                                  />
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* TV Legend */}
+                    <div className="mt-4 bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 mb-3">TV Assignments & Priority Legend</h4>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {/* TV Assignments */}
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">TV Assignments</h5>
+                          <div className="space-y-1">
+                            {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
+                              const gamesList = games as any[]
+                              return (
+                                <div key={tvNumber} className="flex items-center space-x-2 text-sm">
+                                  <div className="bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold">
+                                    TV{tvNumber}
+                                  </div>
+                                  <span className="text-gray-600">{gamesList.length} games</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Priority Colors */}
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Priority Colors</h5>
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-2 text-sm">
+                              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(0, 165, 255)' }}></div>
+                              <span>High Priority (8-10)</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm">
+                              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(128, 210, 128)' }}></div>
+                              <span>Medium Priority (4-7)</span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm">
+                              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(255, 255, 0)' }}></div>
+                              <span>Low Priority (1-3)</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1142,6 +1362,208 @@ export default function Schedule() {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Generate Calendar Modal */}
+        {isGenerateModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">Generate Optimized Calendar</h2>
+                <button
+                  onClick={closeGenerateModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6">
+                {!generatedCalendar ? (
+                  <div>
+                    <div className="mb-4">
+                      <p className="text-gray-600 mb-4">
+                        Generate an optimized viewing calendar for <strong>{weeks[currentWeek] && formatWeekRange(weeks[currentWeek].weekStart, weeks[currentWeek].weekEnd)}</strong> based on your preferences.
+                      </p>
+                      
+                      {userPreferences ? (
+                        <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                          <h4 className="font-semibold text-blue-900 mb-2">Your Preferences:</h4>
+                          <div className="text-sm text-blue-800 space-y-1">
+                            <div>TVs Available: {userPreferences.numberOfTvs}</div>
+                            <div>Favorite Teams: {userPreferences.favoriteNbaTeams?.length ? userPreferences.favoriteNbaTeams.join(', ') : 'None selected'}</div>
+                            {userPreferences.zipCode && <div>Location: {userPreferences.zipCode}</div>}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+                          <div className="flex items-center space-x-2">
+                            <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            <span className="text-yellow-800 font-medium">Please set your preferences first to get personalized recommendations.</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {generateStatus && (
+                      <div className={`mb-4 p-3 rounded-lg ${
+                        generateStatus.type === 'success' 
+                          ? 'bg-green-50 text-green-800 border border-green-200' 
+                          : 'bg-red-50 text-red-800 border border-red-200'
+                      }`}>
+                        <div className="flex items-center space-x-2">
+                          {generateStatus.type === 'success' ? (
+                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          )}
+                          <span className="text-sm">{generateStatus.message}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        onClick={closeGenerateModal}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                        disabled={isGenerating}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={generateOptimizedCalendar}
+                        disabled={isGenerating || !userPreferences}
+                        className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                          isGenerating || !userPreferences
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-purple-600 text-white hover:bg-purple-700'
+                        }`}
+                      >
+                        {isGenerating ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Generating...</span>
+                          </div>
+                        ) : (
+                          'Generate Calendar'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Generated Calendar Results */}
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Optimized Viewing Plan</h3>
+                      <p className="text-gray-600">{generatedCalendar.weekSummary}</p>
+                    </div>
+
+                    {/* TV Schedule */}
+                    <div className="grid gap-6 mb-6">
+                      {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
+                        const gamesList = games as any[]
+                        return (
+                        <div key={tvNumber} className="bg-gray-50 rounded-lg p-4">
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                            <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            TV {tvNumber} ({gamesList.length} games)
+                          </h4>
+                          <div className="space-y-2">
+                            {gamesList.map((game: any) => (
+                              <div key={game.gameId} className="bg-white rounded-lg p-3 border-l-4" style={{ borderLeftColor: game.color }}>
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <div className="font-medium text-gray-900">
+                                      {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                      {game.gameStatusText} • Priority: {game.priority}/10
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: game.color }}></div>
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {game.reasoning}
+                                </div>
+                              </div>
+                            ))}
+                            {gamesList.length === 0 && (
+                              <div className="text-gray-500 text-center py-4">No games assigned to this TV</div>
+                            )}
+                          </div>
+                        </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Recommendations */}
+                    <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                      <h4 className="font-semibold text-blue-900 mb-2">AI Recommendations</h4>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        {generatedCalendar.recommendations.map((rec: string, index: number) => (
+                          <li key={index} className="flex items-start space-x-2">
+                            <span className="text-blue-600">•</span>
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Color Legend */}
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                      <h4 className="font-semibold text-gray-900 mb-2">Priority Color Scale</h4>
+                      <div className="flex items-center space-x-4 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(0, 165, 255)' }}></div>
+                          <span>High Priority</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(128, 210, 128)' }}></div>
+                          <span>Medium Priority</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(255, 255, 0)' }}></div>
+                          <span>Low Priority</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        onClick={() => {
+                          setGeneratedCalendar(null)
+                          setGenerateStatus(null)
+                        }}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                      >
+                        Generate New
+                      </button>
+                      <button
+                        onClick={closeGenerateModal}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
