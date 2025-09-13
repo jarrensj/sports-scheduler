@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { GameCalendarCard } from './GameCalendarCard'
+import UserPreferences from './UserPreferences'
 
 interface Team {
   teamId: number
@@ -539,9 +540,13 @@ export default function Schedule() {
           <p className="text-gray-600 mb-4">
             Last updated: {new Date(scheduleData.meta.time).toLocaleString()}
           </p>
+        </header>
+
+        {/* User Preferences Section */}
+        <UserPreferences />
           
-          {/* View Mode Toggle */}
-          <div className="flex justify-center mb-6">
+        {/* View Mode Toggle */}
+        <div className="flex justify-center mb-6">
             <div className="bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode('calendar')}
@@ -565,9 +570,8 @@ export default function Schedule() {
               </button>
             </div>
           </div>
-        </header>
 
-{viewMode === 'calendar' ? (
+        {viewMode === 'calendar' ? (
           // Calendar View
           <div>
             {weeks.length > 0 && (
