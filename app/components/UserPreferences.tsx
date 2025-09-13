@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface UserPreferences {
   sportsInterests: string[]
@@ -84,21 +84,27 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
   })
 
   const [isExpanded, setIsExpanded] = useState(false)
+  const onPreferencesChangeRef = useRef(onPreferencesChange)
+
+  // Update ref when callback changes
+  useEffect(() => {
+    onPreferencesChangeRef.current = onPreferencesChange
+  }, [onPreferencesChange])
 
   // Load preferences from localStorage on component mount
   useEffect(() => {
     const savedPreferences = loadPreferencesFromStorage()
     if (savedPreferences) {
       setPreferences(savedPreferences)
-      onPreferencesChange?.(savedPreferences)
+      onPreferencesChangeRef.current?.(savedPreferences)
     }
-  }, [onPreferencesChange])
+  }, []) // Empty dependency array - only run on mount
 
   const handlePreferenceChange = (newPreferences: Partial<UserPreferences>) => {
     const updated = { ...preferences, ...newPreferences }
     setPreferences(updated)
     savePreferencesToStorage(updated)
-    onPreferencesChange?.(updated)
+    onPreferencesChangeRef.current?.(updated)
   }
 
   const handleSportsInterestChange = (sport: string) => {
@@ -162,7 +168,7 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Sports Interests
-                <span className="text-gray-400 text-xs ml-2">(Coming Soon)</span>
+                  <span className="text-gray-400 text-xs ml-2">(Coming Soon)</span>
               </label>
               <div className="space-y-2 opacity-50 pointer-events-none">
                 {['Basketball', 'Football', 'Baseball', 'Hockey', 'Soccer', 'Tennis'].map((sport) => (

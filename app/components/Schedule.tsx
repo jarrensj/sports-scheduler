@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { GameCalendarCard } from './GameCalendarCard'
 import UserPreferences from './UserPreferences'
 
@@ -470,7 +470,7 @@ export default function Schedule() {
   }
 
   // Handle user preferences changes
-  const handlePreferencesChange = (preferences: {
+  const handlePreferencesChange = useCallback((preferences: {
     sportsInterests: string[]
     numberOfTvs: number
     tvSetupDescription: string
@@ -478,7 +478,7 @@ export default function Schedule() {
     zipCode: string
   }) => {
     setUserPreferences(preferences)
-  }
+  }, [])
 
   // Generate calendar handlers
   const openGenerateModal = () => {

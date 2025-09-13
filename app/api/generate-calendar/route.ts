@@ -116,8 +116,8 @@ function calculatePriority(game: Game, userPreferences: UserPreferences): number
   }
   
   // Consider playoff games
-  if (game.gameLabel.toLowerCase().includes('playoff') || 
-      game.gameLabel.toLowerCase().includes('finals')) {
+  if (game.gameLabel && (game.gameLabel.toLowerCase().includes('playoff') || 
+      game.gameLabel.toLowerCase().includes('finals'))) {
     priority += 2
   }
   
@@ -155,13 +155,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
-        { status: 500 }
-      )
-    }
-
     // Calculate priorities and colors for each game
     const gamesWithPriority = weekData.games.map(game => ({
       ...game,
@@ -173,6 +166,40 @@ export async function POST(request: NextRequest) {
 
     // Sort games by priority (highest first)
     gamesWithPriority.sort((a, b) => b.priority - a.priority)
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn('OpenAI API key not configured, using fallback logic')
+      // Use fallback logic without AI
+      const fallbackAssignments = gamesWithPriority.map((game, index) => ({
+        gameId: game.gameId,
+        tvNumber: (index % userPreferences.numberOfTvs) + 1,
+        reasoning: 'Automatic assignment (OpenAI API key not configured)'
+      }))
+
+      const optimizedGames: OptimizedGame[] = gamesWithPriority.map(game => {
+        const assignment = fallbackAssignments.find(a => a.gameId === game.gameId)
+        return {
+          ...game,
+          tvAssignment: assignment?.tvNumber || 1,
+          color: getColorFromPriority(game.priority),
+          reasoning: assignment?.reasoning || 'Default assignment'
+        }
+      })
+
+      const tvSchedule: { [tvNumber: number]: OptimizedGame[] } = {}
+      for (let i = 1; i <= userPreferences.numberOfTvs; i++) {
+        tvSchedule[i] = optimizedGames.filter(game => game.tvAssignment === i)
+      }
+
+      const response: CalendarResponse = {
+        optimizedGames,
+        tvSchedule,
+        recommendations: ['OpenAI API not configured - using automatic assignments based on priority'],
+        weekSummary: `Automatic viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)}`
+      }
+
+      return NextResponse.json(response)
+    }
 
     // Create prompt for OpenAI
     const prompt = `
@@ -243,10 +270,36 @@ Focus on:
 
     let aiData
     try {
-      aiData = JSON.parse(aiResponse)
-    } catch {
+      // Log the raw response for debugging
+      console.log('Raw AI response:', aiResponse)
+      
+      // Try to extract JSON from the response (sometimes AI includes extra text)
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
+      const jsonString = jsonMatch ? jsonMatch[0] : aiResponse
+      
+      aiData = JSON.parse(jsonString)
+    } catch (error) {
       console.error('Failed to parse AI response:', aiResponse)
-      throw new Error('Invalid JSON response from AI')
+      console.error('Parse error:', error)
+      throw new Error(`Invalid JSON response from AI: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    // Ensure aiData has the expected structure
+    if (!aiData.tvAssignments) {
+      console.warn('AI response missing tvAssignments, using fallback')
+      aiData.tvAssignments = gamesWithPriority.map((game, index) => ({
+        gameId: game.gameId,
+        tvNumber: (index % userPreferences.numberOfTvs) + 1,
+        reasoning: 'Automatic assignment due to AI response error'
+      }))
+    }
+    
+    if (!aiData.recommendations) {
+      aiData.recommendations = ['AI recommendations unavailable - using automatic assignments']
+    }
+    
+    if (!aiData.weekSummary) {
+      aiData.weekSummary = `Viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)} with automatic TV assignments`
     }
 
     // Apply AI recommendations to games
