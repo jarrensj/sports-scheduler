@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface UserPreferences {
   sportsInterests: string[]
@@ -46,6 +46,33 @@ interface UserPreferencesProps {
   onPreferencesChange?: (preferences: UserPreferences) => void
 }
 
+// Helper functions for localStorage operations
+const STORAGE_KEY = 'sports-scheduler-user-preferences'
+
+const loadPreferencesFromStorage = (): UserPreferences | null => {
+  if (typeof window === 'undefined') return null
+  
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (error) {
+    console.error('Failed to load preferences from localStorage:', error)
+  }
+  return null
+}
+
+const savePreferencesToStorage = (preferences: UserPreferences): void => {
+  if (typeof window === 'undefined') return
+  
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
+  } catch (error) {
+    console.error('Failed to save preferences to localStorage:', error)
+  }
+}
+
 export default function UserPreferences({ onPreferencesChange }: UserPreferencesProps) {
   const [preferences, setPreferences] = useState<UserPreferences>({
     sportsInterests: [],
@@ -56,9 +83,19 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
 
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Load preferences from localStorage on component mount
+  useEffect(() => {
+    const savedPreferences = loadPreferencesFromStorage()
+    if (savedPreferences) {
+      setPreferences(savedPreferences)
+      onPreferencesChange?.(savedPreferences)
+    }
+  }, [onPreferencesChange])
+
   const handlePreferenceChange = (newPreferences: Partial<UserPreferences>) => {
     const updated = { ...preferences, ...newPreferences }
     setPreferences(updated)
+    savePreferencesToStorage(updated)
     onPreferencesChange?.(updated)
   }
 
