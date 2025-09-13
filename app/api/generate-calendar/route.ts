@@ -76,6 +76,8 @@ interface OptimizedGame extends Game {
   tvAssignment: number
   color: string
   reasoning: string
+  assignedDate?: string
+  assignedTimeSlot?: string
 }
 
 interface CalendarResponse {
@@ -144,6 +146,33 @@ function getColorFromPriority(priority: number): string {
   return `rgb(${red}, ${green}, ${blue})`
 }
 
+function getEndTime(startTime: string): string {
+  try {
+    // Parse time like "7:00 pm ET"
+    const timeMatch = startTime.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (!timeMatch) return 'End Time TBD'
+    
+    let hours = parseInt(timeMatch[1])
+    const minutes = parseInt(timeMatch[2])
+    const period = timeMatch[3].toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    // Add 3.5 hours
+    const totalMinutes = hours * 60 + minutes + (3.5 * 60)
+    const endHours = Math.floor(totalMinutes / 60) % 24
+    const endMins = Math.floor(totalMinutes % 60)
+    
+    const endPeriod = endHours >= 12 ? 'pm' : 'am'
+    const displayHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours
+    
+    return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} ET`
+  } catch {
+    return 'End Time TBD'
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { weekData, userPreferences }: CalendarRequest = await request.json()
@@ -192,6 +221,8 @@ export async function POST(request: NextRequest) {
         fallbackAssignments.push({
           gameId: game.gameId,
           tvNumber,
+          date: game.gameDateEst.split(' ')[0], // Extract date part
+          timeSlot: `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`,
           reasoning
         })
       })
@@ -206,6 +237,8 @@ export async function POST(request: NextRequest) {
           fallbackAssignments.push({
             gameId: game.gameId,
             tvNumber,
+            date: game.gameDateEst.split(' ')[0], // Extract date part
+            timeSlot: `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`,
             reasoning: `Duplicate coverage on TV ${tvNumber} - ensures no empty screens during peak hours`
           })
         }
@@ -311,12 +344,14 @@ Please respond with a JSON object containing:
     {
       "gameId": "game_id_here",
       "tvNumber": 1,
+      "date": "01/15/2025",
       "timeSlot": "4:00-7:30 PM",
       "reasoning": "Why this game is on this TV at this time (include transitions)"
     },
     {
       "gameId": "next_game_id",
       "tvNumber": 1,
+      "date": "01/15/2025",
       "timeSlot": "8:00-11:30 PM", 
       "reasoning": "Sequential assignment after previous game ends"
     }
@@ -472,16 +507,18 @@ Focus on:
     }
     
     // Create optimized games from assignments (may include duplicates)
-    const optimizedGames: OptimizedGame[] = aiData.tvAssignments.map((assignment: { gameId: string; tvNumber: number; reasoning: string }) => {
+    const optimizedGames: OptimizedGame[] = aiData.tvAssignments.map((assignment: { gameId: string; tvNumber: number; date?: string; timeSlot?: string; reasoning: string }) => {
       const game = gamesWithPriority.find(g => g.gameId === assignment.gameId)!
       
-      console.log(`Game ${game.gameId} (${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}) assigned to TV ${assignment.tvNumber}`)
+      console.log(`Game ${game.gameId} (${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}) assigned to TV ${assignment.tvNumber} on ${assignment.date || 'unknown date'}`)
       
       return {
         ...game,
         tvAssignment: assignment.tvNumber,
         color: getColorFromPriority(game.priority),
-        reasoning: assignment.reasoning
+        reasoning: assignment.reasoning,
+        assignedDate: assignment.date,
+        assignedTimeSlot: assignment.timeSlot
       }
     })
 
