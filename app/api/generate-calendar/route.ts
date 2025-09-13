@@ -169,11 +169,11 @@ export async function POST(request: NextRequest) {
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OpenAI API key not configured, using fallback logic')
-      // Use fallback logic without AI
+      // Use fallback logic without AI - distribute games evenly across all TVs
       const fallbackAssignments = gamesWithPriority.map((game, index) => ({
         gameId: game.gameId,
         tvNumber: (index % userPreferences.numberOfTvs) + 1,
-        reasoning: 'Automatic assignment (OpenAI API key not configured)'
+        reasoning: `Distributed across ${userPreferences.numberOfTvs} TVs for optimal restaurant viewing (OpenAI API key not configured)`
       }))
 
       const optimizedGames: OptimizedGame[] = gamesWithPriority.map(game => {
@@ -203,12 +203,15 @@ export async function POST(request: NextRequest) {
 
     // Create prompt for OpenAI
     const prompt = `
-You are a sports viewing optimizer. Given the following NBA games for the week and user preferences, please:
+You are a sports viewing optimizer for a multi-TV environment. Given the following NBA games for the week and user preferences, please:
 
-1. Assign games to TVs (user has ${userPreferences.numberOfTvs} TV${userPreferences.numberOfTvs > 1 ? 's' : ''})
-2. Consider time conflicts and optimize viewing experience
-3. Prioritize games based on user's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ')}
-4. Provide reasoning for TV assignments
+1. DISTRIBUTE games across ALL ${userPreferences.numberOfTvs} TVs - DO NOT put all games on TV 1
+2. For restaurant/bar settings: Spread games evenly so customers see variety across all screens
+3. Consider time conflicts - games at the same time should go on different TVs
+4. Prioritize user's favorite teams on prime viewing locations
+5. Use TV setup description to optimize assignments
+
+CRITICAL: You have ${userPreferences.numberOfTvs} TVs available. Make sure to use TV numbers 1 through ${userPreferences.numberOfTvs}.
 
 User's favorite teams: ${userPreferences.favoriteNbaTeams.join(', ') || 'None specified'}
 Number of TVs: ${userPreferences.numberOfTvs}
@@ -240,11 +243,12 @@ Please respond with a JSON object containing:
 }
 
 Focus on:
-- Avoiding time conflicts where possible
-- Prioritizing user's favorite teams on primary TVs
-- Balancing workload across available TVs
-- Considering game importance and quality
-- Using the TV setup description to optimize assignments (e.g., main TV for important games, kitchen TV for background viewing)
+- MANDATORY: Distribute games across ALL ${userPreferences.numberOfTvs} TVs (use TV numbers 1-${userPreferences.numberOfTvs})
+- Simultaneous games MUST go on different TVs to avoid conflicts
+- Balance the number of games per TV - don't overload any single screen
+- For restaurant/bar: Ensure variety across screens for customer satisfaction
+- Prioritize user's favorite teams on prominent viewing locations
+- Use TV setup description for optimal placement (main areas vs background locations)
 `;
 
     const completion = await openai.chat.completions.create({
@@ -286,11 +290,22 @@ Focus on:
 
     // Ensure aiData has the expected structure
     if (!aiData.tvAssignments) {
-      console.warn('AI response missing tvAssignments, using fallback')
+      console.warn('AI response missing tvAssignments, using fallback distribution')
       aiData.tvAssignments = gamesWithPriority.map((game, index) => ({
         gameId: game.gameId,
         tvNumber: (index % userPreferences.numberOfTvs) + 1,
-        reasoning: 'Automatic assignment due to AI response error'
+        reasoning: `Distributed to TV ${(index % userPreferences.numberOfTvs) + 1} for balanced restaurant viewing`
+      }))
+    }
+    
+    // Validate that games are actually distributed across TVs
+    const usedTvs = new Set(aiData.tvAssignments.map((a: any) => a.tvNumber))
+    if (usedTvs.size === 1 && userPreferences.numberOfTvs > 1) {
+      console.warn('AI assigned all games to one TV, redistributing')
+      aiData.tvAssignments = gamesWithPriority.map((game, index) => ({
+        gameId: game.gameId,
+        tvNumber: (index % userPreferences.numberOfTvs) + 1,
+        reasoning: `Redistributed to TV ${(index % userPreferences.numberOfTvs) + 1} for better coverage`
       }))
     }
     
