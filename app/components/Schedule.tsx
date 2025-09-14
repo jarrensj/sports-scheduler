@@ -211,8 +211,48 @@ export default function Schedule() {
     }
   }, [])
 
+  // Convert Eastern Time to Pacific Time
+  const convertETtoPT = (timeString: string) => {
+    try {
+      // Parse time from formats like "12:00 pm ET", "10:30 pm ET", etc.
+      const timeMatch = timeString.match(/(\d{1,2}):(\d{2})\s*(am|pm)\s*ET/i)
+      if (!timeMatch) return timeString // Return original if not ET format
+      
+      let hours = parseInt(timeMatch[1])
+      const minutes = parseInt(timeMatch[2])
+      const period = timeMatch[3].toLowerCase()
+      
+      // Convert to 24-hour format
+      if (period === 'pm' && hours !== 12) hours += 12
+      if (period === 'am' && hours === 12) hours = 0
+      
+      // Convert ET to PT (subtract 3 hours)
+      hours -= 3
+      
+      // Handle day rollover
+      if (hours < 0) {
+        hours += 24
+      }
+      
+      // Convert back to 12-hour format
+      let displayHours = hours
+      let newPeriod = 'am'
+      
+      if (hours === 0) {
+        displayHours = 12
+      } else if (hours >= 12) {
+        newPeriod = 'pm'
+        if (hours > 12) displayHours = hours - 12
+      }
+      
+      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${newPeriod} PT`
+    } catch {
+      return timeString // Return original on error
+    }
+  }
+
   const formatGameTime = (gameStatusText: string) => {
-    return gameStatusText
+    return convertETtoPT(gameStatusText)
   }
 
   const formatDate = (dateString: string) => {
@@ -406,11 +446,14 @@ export default function Schedule() {
     }
   }
 
-  // Helper function to calculate game end time (3.5 hours after start)
+  // Helper function to calculate game end time (3.5 hours after start) in Pacific Time
   const getEndTime = (startTime: string) => {
     try {
-      // Parse time like "7:00 pm ET"
-      const timeMatch = startTime.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+      // First convert to PT, then calculate end time
+      const ptStartTime = convertETtoPT(startTime)
+      
+      // Parse the PT time
+      const timeMatch = ptStartTime.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
       if (!timeMatch) return 'End Time TBD'
       
       let hours = parseInt(timeMatch[1])
@@ -428,7 +471,7 @@ export default function Schedule() {
       const endPeriod = endHours >= 12 ? 'pm' : 'am'
       const displayHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours
       
-      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} ET`
+      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} PT`
     } catch {
       return 'End Time TBD'
     }
@@ -436,8 +479,11 @@ export default function Schedule() {
 
   // Time-based positioning helpers
   const parseGameTime = (gameStatusText: string) => {
-    // Parse time from formats like "12:00 pm ET", "10:30 pm ET", etc.
-    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    // First convert to PT, then parse
+    const ptTime = convertETtoPT(gameStatusText)
+    
+    // Parse time from formats like "12:00 pm PT", "10:30 pm PT", etc.
+    const timeMatch = ptTime.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
     if (!timeMatch) return null
     
     let hours = parseInt(timeMatch[1])
@@ -454,9 +500,9 @@ export default function Schedule() {
     const gameTime = parseGameTime(game.gameStatusText)
     if (gameTime === null) return { top: 0, left: 0, width: 100 }
     
-    // Define time range (6 AM to 2 AM next day = 20 hours)
-    const startTime = 6 * 60 // 6 AM in minutes
-    const endTime = 26 * 60 // 2 AM next day (26:00) in minutes
+    // Define time range (3 AM to 11 PM PT = 20 hours, equivalent to 6 AM to 2 AM ET)
+    const startTime = 3 * 60 // 3 AM PT in minutes
+    const endTime = 23 * 60 // 11 PM PT in minutes
     const totalRange = endTime - startTime
     
     // Adjust for times after midnight
