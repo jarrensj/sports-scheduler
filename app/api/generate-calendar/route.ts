@@ -456,13 +456,14 @@ Focus on:
     }
 
     let aiData
+    let jsonString = ''
     try {
       // Log the raw response for debugging
       console.log('Raw AI response:', aiResponse)
       
       // Try to extract JSON from the response (sometimes AI includes extra text)
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
-      let jsonString = jsonMatch ? jsonMatch[0] : aiResponse
+      jsonString = jsonMatch ? jsonMatch[0] : aiResponse
       
       // Clean up common JSON issues from AI responses
       jsonString = jsonString
