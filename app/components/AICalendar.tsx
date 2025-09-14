@@ -1,31 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar } from './ui/calendar'
 import { format, isSameDay } from 'date-fns'
-
-// Convert priority (1-10) to star rating (1-5)
-const getStarRating = (priority: number) => {
-  return Math.max(1, Math.min(5, Math.ceil(priority / 2)))
-}
-
-// Star Rating Component
-const StarRating = ({ rating, className = "" }: { rating: number, className?: string }) => {
-  const stars = []
-  for (let i = 1; i <= 5; i++) {
-    stars.push(
-      <svg
-        key={i}
-        className={`w-4 h-4 ${i <= rating ? 'text-yellow-400 fill-current' : 'text-gray-300'} ${className}`}
-        viewBox="0 0 20 20"
-        fill="currentColor"
-      >
-        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-      </svg>
-    )
-  }
-  return <div className="flex items-center space-x-1">{stars}</div>
-}
 
 interface Team {
   teamId: number
@@ -178,7 +154,7 @@ export default function AICalendar({
       <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6">
         <h3 className="text-2xl font-bold flex items-center mb-2">
           <svg className="w-7 h-7 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />                              
           </svg>
           AI-Optimized Calendar
         </h3>
@@ -190,28 +166,11 @@ export default function AICalendar({
         <div>
           <h4 className="text-lg font-semibold mb-4 text-gray-900">Select a Day</h4>
           <div className="border rounded-lg p-4 bg-white">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              disabled={(date) => {
-                // Only enable dates that have games and are within the week range
-                return !datesWithGames.some(gameDate => isSameDay(gameDate, date)) ||
-                       date < weekStart || 
-                       date > weekEnd
-              }}
-              modifiers={{
-                hasGames: datesWithGames
-              }}
-              modifiersStyles={{
-                hasGames: { 
-                  backgroundColor: '#3B82F6', 
-                  color: 'white',
-                  fontWeight: 'bold'
-                }
-              }}
-              className="rounded-md border-0 w-full"
-            />
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-2">📅</div>
+              <p>Calendar component removed</p>
+              <p className="text-sm mt-2">Click on games below to view details</p>
+            </div>
           </div>
           
           {/* Legend */}
@@ -261,13 +220,13 @@ export default function AICalendar({
                   .map(game => (
                     <div 
                       key={game.gameId}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"                                                                        
                       onClick={() => onGameClick(game)}
                     >
                       <div className="flex items-center space-x-3">
                         {/* Day Badge */}
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-bold">
-                          {format(game.assignedDate ? new Date(game.assignedDate) : new Date(game.gameDateEst), 'EEE').toUpperCase()}
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-bold">                                                                                                           
+                          {format(game.assignedDate ? new Date(game.assignedDate) : new Date(game.gameDateEst), 'EEE').toUpperCase()}                                                                                   
                         </span>
                         <div>
                           <div className="font-medium text-sm">
@@ -278,7 +237,11 @@ export default function AICalendar({
                           </div>
                         </div>
                       </div>
-                      <StarRating rating={getStarRating(game.priority)} />
+                      <div 
+                        className="w-4 h-4 rounded-full"
+                        style={{ backgroundColor: game.color }}
+                        title={`Priority: ${game.priority}/10`}
+                      ></div>
                     </div>
                   ))
                 }
@@ -310,7 +273,7 @@ export default function AICalendar({
                   >
                     {/* TV Header */}
                     <div className="flex items-center justify-center mb-4">
-                      <div className="bg-gradient-to-r from-gray-800 to-gray-700 text-white px-4 py-2 rounded-lg font-bold text-sm">
+                      <div className="bg-gradient-to-r from-gray-800 to-gray-700 text-white px-4 py-2 rounded-lg font-bold text-sm">                                                                                    
                         📺 TV {tvNumber}
                       </div>
                     </div>
@@ -329,7 +292,7 @@ export default function AICalendar({
                             <div key={`${game.gameId}-${index}`}>
                               {/* Game Card */}
                               <div 
-                                className="p-3 rounded-lg cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm border"
+                                className="p-3 rounded-lg cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm border"                                                                                  
                                 style={{ backgroundColor: game.color, borderColor: game.color }}
                                 onClick={() => onGameClick(game)}
                                 title={game.reasoning}
@@ -337,8 +300,8 @@ export default function AICalendar({
                                 <div className="text-white">
                                   {/* Day of Week Badge */}
                                   <div className="flex justify-center mb-2">
-                                    <span className="bg-white bg-opacity-20 text-white px-2 py-1 rounded-full text-xs font-bold">
-                                      {format(game.assignedDate ? new Date(game.assignedDate) : new Date(game.gameDateEst), 'EEE').toUpperCase()}
+                                    <span className="bg-white bg-opacity-20 text-white px-2 py-1 rounded-full text-xs font-bold">                                                                                       
+                                      {format(game.assignedDate ? new Date(game.assignedDate) : new Date(game.gameDateEst), 'EEE').toUpperCase()}                                                                       
                                     </span>
                                   </div>
                                   
@@ -348,8 +311,8 @@ export default function AICalendar({
                                   <div className="text-xs text-center opacity-90 font-medium">
                                     {game.assignedTimeSlot || game.gameStatusText}
                                   </div>
-                                  <div className="flex justify-center mt-2">
-                                    <StarRating rating={getStarRating(game.priority)} className="w-3 h-3" />
+                                  <div className="text-xs text-center opacity-75 mt-1">
+                                    Priority: {game.priority}/10
                                   </div>
                                 </div>
                               </div>
@@ -371,7 +334,7 @@ export default function AICalendar({
             </div>
           </div>
 
-          {/* Scroll Hint */}
+          {/* Scroll Hint */}s of g
           {numberOfTVs > 4 && (
             <div className="text-center text-sm text-gray-500 mt-2">
               ← Scroll horizontally to see all {numberOfTVs} TVs →
