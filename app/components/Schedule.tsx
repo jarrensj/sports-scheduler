@@ -885,26 +885,46 @@ export default function Schedule() {
                               ))}
                             </div>
 
-                            {/* Games positioned by time with optimization */}
-                            <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
-                              {day.games.map((game) => {
-                                const position = getGamePosition(game, day.games)
-                                // Find ALL TVs that show this game
-                                const allTvsForGame = generatedCalendar.optimizedGames
-                                  ?.filter(og => og.gameId === game.gameId)
-                                  ?.map(og => og.tvAssignment) || []
+                            {/* TV-based timeline view showing transitions */}
+                            <div className="space-y-2 pt-2" style={{ height: 'calc(100% - 40px)' }}>
+                              {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, tvGames]) => {
+                                // Filter games for this specific day
+                                const dayTvGames = (tvGames as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>)
+                                  .filter(game => {
+                                    const gameDate = new Date(game.gameDateEst).toDateString()
+                                    return gameDate === day.date.toDateString()
+                                  })
+                                  .sort((a, b) => a.gameStatusText.localeCompare(b.gameStatusText))
                                 
-                                const optimizedGame = generatedCalendar.optimizedGames?.find(og => og.gameId === game.gameId)
+                                if (dayTvGames.length === 0) return null
+                                
                                 return (
-                                  <GameCalendarCard
-                                    key={game.gameId}
-                                    game={game}
-                                    position={position}
-                                    onGameClick={openGameModal}
-                                    optimizedColor={optimizedGame?.color || 'rgb(200, 200, 200)'}
-                                    tvAssignments={allTvsForGame}
-                                    priority={optimizedGame?.priority || 5}
-                                  />
+                                  <div key={`tv-${tvNumber}-${day.date.toDateString()}`} className="bg-gray-50 rounded-lg p-3 border">
+                                    <div className="flex items-center mb-2">
+                                      <div className="bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold mr-2">
+                                        TV{tvNumber}
+                                      </div>
+                                      <span className="text-xs text-gray-600">{dayTvGames.length} game{dayTvGames.length !== 1 ? 's' : ''} with transitions</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {dayTvGames.map((game, gameIndex) => (
+                                        <div key={`${game.gameId}-${gameIndex}`} className="flex items-center">
+                                          <div 
+                                            className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                                            style={{ backgroundColor: game.color, color: 'white' }}
+                                            onClick={() => openGameModal(game)}
+                                            title={`${game.reasoning} | Priority: ${game.priority}`}
+                                          >
+                                            <div className="font-bold">{game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}</div>
+                                            <div className="text-xs opacity-90">{game.assignedTimeSlot || game.gameStatusText}</div>
+                                          </div>
+                                          {gameIndex < dayTvGames.length - 1 && (
+                                            <div className="mx-1 text-gray-400 text-xs">→</div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
                                 )
                               })}
                             </div>
