@@ -1581,7 +1581,7 @@ export default function Schedule() {
                       })
 
                       const duplicatedGames = Array.from(gameOccurrences.entries())
-                        .filter(([_, tvs]) => tvs.length > 1)
+                        .filter(([, tvs]) => tvs.length > 1)
                         .map(([gameKey, tvs]) => ({ gameKey, tvs: tvs.sort((a, b) => a - b) }))
 
                       if (duplicatedGames.length === 0) return null
@@ -1634,7 +1634,7 @@ export default function Schedule() {
                           const sortedDayGames = [...dayGames].sort((a, b) => a.gameStatusText.localeCompare(b.gameStatusText))
                           
                           // Create TV schedule for this day
-                          const tvScheduleForDay: { [tvNumber: number]: Array<{ game: any; timeSlot: string }> } = {}
+                          const tvScheduleForDay: { [tvNumber: number]: Array<{ game: Game; timeSlot: string }> } = {}
                           
                           // Initialize all TVs
                           for (let i = 1; i <= (userPreferences?.numberOfTvs || 1); i++) {
