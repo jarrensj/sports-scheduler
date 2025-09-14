@@ -77,11 +77,11 @@ interface GameCalendarCardProps {
   position: { top: number; left: number; width: number }
   onGameClick: (game: Game) => void
   optimizedColor?: string
-  tvAssignment?: number
+  tvAssignments?: number[]  // Changed to array to show multiple TVs
   priority?: number
 }
 
-export function GameCalendarCard({ game, position, onGameClick, optimizedColor, tvAssignment, priority }: GameCalendarCardProps) {
+export function GameCalendarCard({ game, position, onGameClick, optimizedColor, tvAssignments, priority }: GameCalendarCardProps) {
   const getAllBroadcasters = (broadcasters: Broadcasters) => {
     const allBroadcasters = [
       ...broadcasters.nationalBroadcasters,
@@ -124,12 +124,19 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
       style={cardStyle}
       onClick={() => onGameClick(game)}
     >
-      {/* TV Assignment indicator */}
-      {tvAssignment && (
-        <div className="flex justify-start items-center mb-1">
-          <div className="bg-gray-800 text-white px-1 py-0.5 rounded text-xs font-bold">
-            TV{tvAssignment}
-          </div>
+      {/* TV Assignment indicators */}
+      {tvAssignments && tvAssignments.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1">
+          {tvAssignments.slice(0, 6).map(tvNum => (
+            <div key={tvNum} className="bg-gray-800 text-white px-1 py-0.5 rounded text-xs font-bold">
+              TV{tvNum}
+            </div>
+          ))}
+          {tvAssignments.length > 6 && (
+            <div className="bg-gray-600 text-white px-1 py-0.5 rounded text-xs font-bold">
+              +{tvAssignments.length - 6}
+            </div>
+          )}
         </div>
       )}
 
