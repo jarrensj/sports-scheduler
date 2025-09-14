@@ -2008,9 +2008,9 @@ export default function Schedule() {
                         }`}
                       >
                         {isGenerating ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            <span>Generating...</span>
+                          <div className="flex items-center justify-center space-x-3">
+                            <div className="animate-spin rounded-full h-6 w-6 border-4 border-white border-r-transparent"></div>
+                            <span className="font-medium">Generating AI Calendar...</span>
                           </div>
                         ) : (
                           'Generate Calendar'
@@ -2051,7 +2051,9 @@ export default function Schedule() {
                                     </div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: game.color }}></div>
+                                    <div className="text-lg" title={`Priority: ${game.priority}/10`}>
+                                      {'⭐'.repeat(Math.max(1, Math.min(5, Math.round(game.priority / 2))))}
+                                    </div>
                                   </div>
                                 </div>
                                 {game.reasoning && !game.reasoning.includes('duplicate') && (
@@ -2164,7 +2166,7 @@ export default function Schedule() {
                         }}
                         className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                       >
-                        Generate New
+                        Regenerate
                       </button>
                       <button
                         onClick={closeGenerateModal}
