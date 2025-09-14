@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { GameCalendarCard } from './GameCalendarCard'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
 interface Team {
   teamId: number
@@ -2021,124 +2022,141 @@ export default function Schedule() {
                 ) : (
                   <div>
                     {/* Generated Calendar Results */}
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Optimized Viewing Plan</h3>
-                      <p className="text-gray-600">{generatedCalendar.weekSummary}</p>
-                    </div>
+                    <Card className="mb-6">
+                      <CardHeader>
+                        <CardTitle>Optimized Viewing Plan</CardTitle>
+                        <CardDescription>{generatedCalendar.weekSummary}</CardDescription>
+                      </CardHeader>
+                    </Card>
 
                     {/* TV Schedule */}
                     <div className="grid gap-6 mb-6">
                       {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
                         const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
                         return (
-                        <div key={tvNumber} className="bg-gray-50 rounded-lg p-4">
-                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                            <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                            TV {tvNumber} ({gamesList.length} games)
-                          </h4>
-                          <div className="space-y-2">
+                        <Card key={tvNumber}>
+                          <CardHeader>
+                            <CardTitle className="flex items-center">
+                              <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 002 2z" />
+                              </svg>
+                              TV {tvNumber}
+                            </CardTitle>
+                            <CardDescription>{gamesList.length} games assigned</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
                             {gamesList.map((game) => (
-                              <div key={game.gameId} className="bg-white rounded-lg p-3 border-l-4" style={{ borderLeftColor: game.color }}>
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <div className="font-medium text-gray-900">
-                                      {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                              <Card key={game.gameId} className="border-l-4 shadow-sm" style={{ borderLeftColor: game.color }}>
+                                <CardContent className="py-4">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <div className="font-medium text-gray-900">
+                                        {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                      </div>
+                                      <div className="text-sm text-gray-600">
+                                        {game.gameStatusText}
+                                      </div>
                                     </div>
-                                    <div className="text-sm text-gray-600">
-                                      {game.gameStatusText}
+                                    <div className="text-right">
+                                      <div className="text-lg" title={`Priority: ${game.priority}/10`}>
+                                        {'⭐'.repeat(Math.max(1, Math.min(5, Math.round(game.priority / 2))))}
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="text-right">
-                                    <div className="text-lg" title={`Priority: ${game.priority}/10`}>
-                                      {'⭐'.repeat(Math.max(1, Math.min(5, Math.round(game.priority / 2))))}
+                                  {game.reasoning && !game.reasoning.includes('duplicate') && (
+                                    <div className="text-xs text-muted-foreground mt-2">
+                                      {game.reasoning}
                                     </div>
-                                  </div>
-                                </div>
-                                {game.reasoning && !game.reasoning.includes('duplicate') && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {game.reasoning}
-                                  </div>
-                                )}
-                              </div>
+                                  )}
+                                </CardContent>
+                              </Card>
                             ))}
                             {gamesList.length === 0 && (
-                              <div className="text-gray-500 text-center py-4">No games assigned to this TV</div>
+                              <div className="text-muted-foreground text-center py-4">No games assigned to this TV</div>
                             )}
-                          </div>
-                        </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                         )
                       })}
                     </div>
                     {/* Recommendations */}
-                    <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                      <h4 className="font-semibold text-blue-900 mb-2">AI Recommendations</h4>
-                      <ul className="text-sm text-blue-800 space-y-1">
-                        {generatedCalendar.recommendations.map((rec: string, index: number) => (
-                          <li key={index} className="flex items-start space-x-2">
-                            <span className="text-blue-600">•</span>
-                            <span>{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <Card className="mb-6 border-blue-200 bg-blue-50">
+                      <CardHeader>
+                        <CardTitle className="text-blue-900">AI Recommendations</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="text-sm text-blue-800 space-y-2">
+                          {generatedCalendar.recommendations.map((rec: string, index: number) => (
+                            <li key={index} className="flex items-start space-x-2">
+                              <span className="text-blue-600 mt-1">•</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
 
 
                     {/* Email Section */}
-                    <div className="bg-green-50 rounded-lg p-4 mb-6">
-                      <h4 className="font-semibold text-green-900 mb-3">📧 Email This Plan</h4>
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <input
-                          type="email"
-                          placeholder="Enter your email address"
-                          value={emailAddress}
-                          onChange={(e) => setEmailAddress(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                        />
-                        <button
-                          onClick={sendOptimizedCalendarEmail}
-                          disabled={isEmailSending || !emailAddress}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-2"
-                        >
-                          {isEmailSending ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              <span>Sending...</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              <span>Send Email</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      
-                      {/* Email Status */}
-                      {emailStatus && (
-                        <div className={`mt-3 p-3 rounded-lg ${
-                          emailStatus.type === 'success' 
-                            ? 'bg-green-100 text-green-800 border border-green-200' 
-                            : 'bg-red-100 text-red-800 border border-red-200'
-                        }`}>
-                          <div className="flex items-center space-x-2">
-                            {emailStatus.type === 'success' ? (
-                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
+                    <Card className="mb-6 border-green-200 bg-green-50">
+                      <CardHeader>
+                        <CardTitle className="text-green-900">📧 Email This Plan</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <input
+                            type="email"
+                            placeholder="Enter your email address"
+                            value={emailAddress}
+                            onChange={(e) => setEmailAddress(e.target.value)}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                          />
+                          <button
+                            onClick={sendOptimizedCalendarEmail}
+                            disabled={isEmailSending || !emailAddress}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-2"
+                          >
+                            {isEmailSending ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>Sending...</span>
+                              </>
                             ) : (
-                              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                              </svg>
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span>Send Email</span>
+                              </>
                             )}
-                            <span className="font-medium">{emailStatus.message}</span>
-                          </div>
+                          </button>
                         </div>
-                      )}
-                    </div>
+                        
+                        {/* Email Status */}
+                        {emailStatus && (
+                          <div className={`mt-3 p-3 rounded-lg ${
+                            emailStatus.type === 'success' 
+                              ? 'bg-green-100 text-green-800 border border-green-200' 
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            <div className="flex items-center space-x-2">
+                              {emailStatus.type === 'success' ? (
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : (
+                                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                              )}
+                              <span className="font-medium">{emailStatus.message}</span>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
 
                     <div className="flex justify-end space-x-3">
                       <button

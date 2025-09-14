@@ -5,7 +5,7 @@ interface Team {
   teamTricode: string
   teamSlug: string
   wins: number
-  losses: number
+  losses: numbernerate
   score: number
   seed: number
 }
