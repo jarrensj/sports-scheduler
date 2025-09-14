@@ -1019,7 +1019,7 @@ export default function Schedule() {
                                           </div>
                                           
                                           <div className="text-sm text-gray-600 bg-white rounded-lg px-4 py-3 italic">
-                                            "{game.reasoning}"
+                                            &ldquo;{game.reasoning}&rdquo;
                                           </div>
                                         </div>
                                         
