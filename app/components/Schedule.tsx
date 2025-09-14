@@ -102,8 +102,9 @@ export default function Schedule() {
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar')
+  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'tv-day'>('calendar')
   const [currentWeek, setCurrentWeek] = useState(0)
+  const [currentDay, setCurrentDay] = useState(0) // For TV day view
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(5) // Show 5 game dates per page
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
@@ -244,6 +245,42 @@ export default function Schedule() {
   const weeks = getWeeksFromSchedule()
   const totalWeeks = weeks.length
 
+  // Get all game dates for TV day view
+  const getAllGameDates = () => {
+    if (!scheduleData) return []
+    
+    const allDates: Array<{
+      date: Date
+      games: Game[]
+      dateString: string
+    }> = []
+    
+    scheduleData.leagueSchedule.gameDates.forEach(gameDate => {
+      // Convert from "MM/DD/YYYY HH:MM:SS" to proper date
+      const datePart = gameDate.gameDate.split(' ')[0] // Get "MM/DD/YYYY"
+      const [month, day, year] = datePart.split('/')
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+      
+      allDates.push({
+        date,
+        games: gameDate.games,
+        dateString: date.toLocaleDateString('en-US', { 
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      })
+    })
+    
+    // Sort by date
+    allDates.sort((a, b) => a.date.getTime() - b.date.getTime())
+    return allDates
+  }
+
+  const allGameDates = getAllGameDates()
+  const totalDays = allGameDates.length
+
   const goToPrevWeek = () => {
     if (currentWeek > 0) {
       setCurrentWeek(currentWeek - 1)
@@ -253,6 +290,19 @@ export default function Schedule() {
   const goToNextWeek = () => {
     if (currentWeek < totalWeeks - 1) {
       setCurrentWeek(currentWeek + 1)
+    }
+  }
+
+  // TV Day view navigation
+  const goToPrevDay = () => {
+    if (currentDay > 0) {
+      setCurrentDay(currentDay - 1)
+    }
+  }
+
+  const goToNextDay = () => {
+    if (currentDay < totalDays - 1) {
+      setCurrentDay(currentDay + 1)
     }
   }
 
@@ -688,6 +738,16 @@ export default function Schedule() {
                 Calendar View
               </button>
               <button
+                onClick={() => setViewMode('tv-day')}
+                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                  viewMode === 'tv-day'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📺 TV Day View
+              </button>
+              <button
                 onClick={() => setViewMode('list')}
                 className={`px-4 py-2 rounded-md font-medium transition-colors ${
                   viewMode === 'list'
@@ -1015,6 +1075,190 @@ export default function Schedule() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : viewMode === 'tv-day' ? (
+          // TV Day View - Optimized for Television Displays
+          <div>
+            {allGameDates.length > 0 && (
+              <>
+                {/* Day Navigation */}
+                <div className="flex justify-between items-center mb-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                  <button
+                    onClick={goToPrevDay}
+                    disabled={currentDay === 0}
+                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                      currentDay === 0
+                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
+                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                    }`}
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span>Previous Day</span>
+                  </button>
+
+                  <div className="text-center">
+                    <h1 className="text-3xl font-bold mb-2">
+                      📺 {allGameDates[currentDay]?.dateString}
+                    </h1>
+                    <p className="text-blue-100 text-lg font-medium">
+                      Day {currentDay + 1} of {totalDays} • {allGameDates[currentDay]?.games.length} games today
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={goToNextDay}
+                    disabled={currentDay === totalDays - 1}
+                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                      currentDay === totalDays - 1
+                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
+                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                    }`}
+                  >
+                    <span>Next Day</span>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* TV-Optimized Game Cards */}
+                {allGameDates[currentDay]?.games.length === 0 ? (
+                  <div className="text-center py-20">
+                    <div className="text-6xl mb-4">📺</div>
+                    <h2 className="text-3xl font-bold text-gray-600 mb-2">No Games Today</h2>
+                    <p className="text-xl text-gray-500">Check back tomorrow for more games!</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+                    {allGameDates[currentDay]?.games.map((game) => (
+                      <div 
+                        key={game.gameId}
+                        className="bg-white rounded-2xl shadow-2xl overflow-hidden hover:shadow-3xl transition-all duration-300 transform hover:scale-105 cursor-pointer border-4 border-transparent hover:border-blue-500"
+                        onClick={() => openGameModal(game)}
+                      >
+                        {/* Game Header - Large and Bold for TV */}
+                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+                          <div className="text-center">
+                            <div className="text-4xl font-black mb-2">
+                              {formatGameTime(game.gameStatusText)}
+                            </div>
+                            {game.gameSubLabel && (
+                              <div className="bg-orange-500 text-white px-4 py-2 rounded-full text-lg font-bold inline-block">
+                                {game.gameSubLabel}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Teams Section - Extra Large for TV Viewing */}
+                        <div className="p-8">
+                          <div className="flex items-center justify-between mb-6">
+                            {/* Away Team */}
+                            <div className="text-center flex-1">
+                              <div className="text-sm text-gray-500 font-medium mb-2">AWAY</div>
+                              <div className="text-2xl font-black text-gray-900 mb-2">
+                                {game.awayTeam.teamTricode}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.awayTeam.teamCity}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.awayTeam.teamName}
+                              </div>
+                              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg text-lg font-bold mt-2">
+                                {game.awayTeam.wins}-{game.awayTeam.losses}
+                              </div>
+                            </div>
+
+                            {/* VS Divider */}
+                            <div className="px-6">
+                              <div className="text-4xl font-black text-gray-400">@</div>
+                            </div>
+
+                            {/* Home Team */}
+                            <div className="text-center flex-1">
+                              <div className="text-sm text-gray-500 font-medium mb-2">HOME</div>
+                              <div className="text-2xl font-black text-gray-900 mb-2">
+                                {game.homeTeam.teamTricode}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.homeTeam.teamCity}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.homeTeam.teamName}
+                              </div>
+                              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg text-lg font-bold mt-2">
+                                {game.homeTeam.wins}-{game.homeTeam.losses}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Venue Information - Large Text */}
+                          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div className="flex items-center justify-center space-x-3">
+                              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-gray-900">{game.arenaName}</div>
+                                <div className="text-base text-gray-600">
+                                  {game.arenaCity}{game.arenaState && `, ${game.arenaState}`}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Broadcast Information - Prominent for TV */}
+                          <div className="bg-green-50 rounded-lg p-4">
+                            <div className="flex items-center justify-center space-x-3 mb-3">
+                              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-lg font-bold text-green-800">WATCH ON</span>
+                            </div>
+                            
+                            {getAllBroadcasters(game.broadcasters).length > 0 ? (
+                              <div className="flex flex-wrap gap-2 justify-center">
+                                {getAllBroadcasters(game.broadcasters).slice(0, 4).map((broadcaster, idx) => (
+                                  <span key={idx} className="bg-green-600 text-white px-4 py-2 rounded-full text-base font-bold">
+                                    {broadcaster}
+                                  </span>
+                                ))}
+                                {getAllBroadcasters(game.broadcasters).length > 4 && (
+                                  <span className="bg-green-500 text-white px-4 py-2 rounded-full text-base font-bold">
+                                    +{getAllBroadcasters(game.broadcasters).length - 4} more
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <span className="bg-gray-400 text-white px-4 py-2 rounded-full text-base font-bold">
+                                  TBD
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Game Duration Info */}
+                          <div className="mt-4 text-center">
+                            <div className="bg-blue-50 rounded-lg p-3">
+                              <div className="text-sm text-blue-600 font-medium mb-1">ESTIMATED DURATION</div>
+                              <div className="text-lg font-bold text-blue-800">
+                                {formatGameTime(game.gameStatusText)} - {getEndTime(game.gameStatusText)}
+                              </div>
+                              <div className="text-sm text-blue-600">~3.5 hours including coverage</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </>
