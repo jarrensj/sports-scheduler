@@ -957,24 +957,35 @@ export default function Schedule() {
                     <p className="text-gray-500 text-sm">
                       Week {currentWeek + 1} of {totalWeeks}
                     </p>
-                    <div className="mt-2 flex items-center justify-center space-x-2">
-                      <button
-                        onClick={openGenerateModal}
-                        className="flex items-center space-x-2 px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        <span>Generate</span>
-                      </button>
+                    <div className="mt-2 flex flex-col items-center justify-center space-y-2">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button
+                          onClick={openGenerateModal}
+                          className="flex items-center space-x-2 px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                          <span>Generate</span>
+                        </button>
+                        <button
+                          onClick={openEmailModal}
+                          className="flex items-center space-x-2 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          <span>Email Week</span>
+                        </button>
+                      </div>
                       <button
                         onClick={openEmailModal}
-                        className="flex items-center space-x-2 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all text-sm font-medium shadow-md hover:shadow-lg transform hover:scale-105"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.828 7l1.414 1.414L5 9.828V15a1 1 0 001 1h3V9.828L7.586 8.414 9 7H4.828zM9 3v4l5-4v18l-5-4v4h9V3H9z" />
                         </svg>
-                        <span>Email Week</span>
+                        <span>Subscribe for Daily Automated Emails</span>
                       </button>
                     </div>
                   </div>
@@ -1248,7 +1259,26 @@ export default function Schedule() {
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                 </svg>
-                                <span>Send Email</span>
+                                <span>Email Automated Plan</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={sendOptimizedCalendarEmail}
+                            disabled={isEmailSending || !emailAddress}
+                            className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all font-medium flex items-center space-x-2 text-base shadow-md hover:shadow-lg transform hover:scale-105"
+                          >
+                            {isEmailSending ? (
+                              <>
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                <span>Sending...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.828 7l1.414 1.414L5 9.828V15a1 1 0 001 1h3V9.828L7.586 8.414 9 7H4.828zM9 3v4l5-4v18l-5-4v4h9V3H9z" />
+                                </svg>
+                                <span>Subscribe for Daily Automated Emails</span>
                               </>
                             )}
                           </button>
