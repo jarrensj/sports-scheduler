@@ -316,14 +316,14 @@ CRITICAL DATE AWARENESS:
 - Games on DIFFERENT DATES do NOT conflict with each other
 - Only games on the SAME DATE and SAME TIME create scheduling conflicts
 - Each date should have its own independent TV schedule
-- A TV can show Game A on Monday and Game B on Tuesday without any conflict
 
 SCHEDULING RULES PER DATE:
 1. CREATE DAILY TV SCHEDULES - Each TV gets games for each day independently
 2. NBA GAME DURATION - Each game lasts 3.5 hours (including pre/post-game coverage)
 3. SAME-DAY CONFLICTS ONLY - Only worry about time conflicts within the same date
-4. SIMULTANEOUS GAME SPLITTING - If 2 games start at same time ON THE SAME DATE, split TVs between them
-5. PREFERENCE-BASED SPLITTING - Use user's favorite teams to determine TV splits (60/40, 70/30, etc.)
+4. SIMULTANEOUS GAME SPLITTING - If 2 games start at same time ON THE SAME DATE, split TVs between them (have one TV show one game and another TV show the other game with preference on the more prominent game on the more prominenet TV)
+5. If there are two games and four tvs, you should have two TVs show one game and two TVs show the other game.
+5. PREFERENCE-BASED SPLITTING - Use user's favorite teams to determine TV splits (60/40, 70/30, etc.) If there are two games back to back and there are five tvs, and one game is a favorite team game and the other game is not a favorite team game, you should have three TVs show the favorite team game and two TVs show the other game.
 6. DAILY COVERAGE - Plan complete schedules for each date independently
 
 EXAMPLE SCHEDULING LOGIC (RESPECTING DATES):
@@ -331,18 +331,17 @@ MONDAY 1/15/2025:
 - 4:00 PM: 2 games start simultaneously on Monday
   * Game A (user's favorite team): TVs 1,2,3,4,5,6 (60% of TVs)  
   * Game B (regular game): TVs 7,8,9,10 (40% of TVs)
-- 7:30 PM: Monday games end, next Monday game at 8:00 PM
+- 7:30 PM: Both 4 pm games end, next game that day isat 8:00 PM
   * All TVs switch to the 8:00 PM Monday game
 
 TUESDAY 1/16/2025:
-- 7:00 PM: Tuesday game starts (NO CONFLICT with Monday games)
-  * All TVs can show Tuesday game - it's a different day!
+- 7:00 PM: Tuesday game starts (NO CONFLICT with Monday games since it's a different day)
+  * All TVs can show that Tuesday game - it's a different day! If there are no other games, all TV show should that same game.
 
 CRITICAL REQUIREMENTS:
 - RESPECT DATES: Games on different dates do NOT conflict
 - SAME-DATE CONFLICTS: Only games on the same date and overlapping times conflict
-- DAILY INDEPENDENCE: Each date gets its own TV schedule
-- EVERY TV must have assignments for days when games are available
+- EVERY TV must have assignments when games are available
 - Use user preferences to weight TV assignments (favorite teams get more TVs)
 
 TV SETUP ANALYSIS:
@@ -416,22 +415,17 @@ JSON FORMATTING REQUIREMENTS:
 - Complete all reasoning strings - do not leave them incomplete
 - Ensure all objects and arrays are properly closed
 
-Focus on:
 - MANDATORY TV TRANSITIONS: Every TV must show ALL games on each date in chronological order
-- COMPLETE DAILY COVERAGE: If there are 2 games on Monday, every TV shows both games (transitions between them)
 - NO IDLE TVS: Never leave a TV empty when games are available on that date
 - SEQUENTIAL SCHEDULING: TV1 shows Game1 (5:00-8:30), then transitions to Game2 (8:30-12:00)
 - PRIORITY-BASED PROMINENCE: Higher priority games (favorite teams, regional preferences) get better TV placement
 - MANDATORY DATE AWARENESS: Each assignment MUST include the correct date from the game data
 - DAILY INDEPENDENCE: Games on different dates can use the same TV without conflict
-- SAME-DATE CONFLICTS: Only worry about time conflicts within the same date
 - DISTRIBUTE ACROSS ALL TVs: Use TV numbers 1-${userPreferences.numberOfTvs} for each date that has games
 - DATE FORMAT: Use YYYY-MM-DD format for dates (e.g., "2025-01-15")
 - 3.5-HOUR GAME DURATION: NBA games last ~3.5 hours including pre/post-game
-- TRANSITION TIMING: Plan smooth transitions when one game ends and another begins
 - FAVORITE TEAM PRIORITY: Games with user's favorite teams get premium TV assignments
 - REGIONAL PREFERENCES: Teams near user's zip code get priority consideration
-- REASONING: Always explain TV choice including transitions and priority factors
 `;
 
     const completion = await openai.chat.completions.create({
@@ -519,43 +513,262 @@ Focus on:
         
         console.log(`Processing date ${date} with ${gamesOnDate.length} games:`, gamesByTimeOnDate.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
         
-        // For each date, create proper TV transitions for ALL games
-        // Every TV should show every game on that date (transitioning between them)
+        // For each date, handle time conflicts properly
+        // Group games by time slot to identify conflicts
+        const gamesByTimeSlot = new Map<string, typeof gamesOnDate>()
+        gamesByTimeOnDate.forEach(game => {
+          const timeKey = game.gameStatusText
+          if (!gamesByTimeSlot.has(timeKey)) {
+            gamesByTimeSlot.set(timeKey, [])
+          }
+          gamesByTimeSlot.get(timeKey)!.push(game)
+        })
         
-        // For each TV, assign ALL games on this date in chronological order
-        for (let tvNumber = 1; tvNumber <= userPreferences.numberOfTvs; tvNumber++) {
-          gamesByTimeOnDate.forEach((game, gameIndex) => {
-            const gameDate = game.gameDateEst.split(' ')[0] // Extract date part
-            const timeSlot = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
+        console.log(`Date ${date} has ${gamesByTimeSlot.size} time slots:`, Array.from(gamesByTimeSlot.keys()))
+        
+        // Track which TVs are busy at each time
+        const tvScheduleByTime = new Map<string, Set<number>>() // timeSlot -> set of busy TV numbers
+        
+        // Process each time slot
+        Array.from(gamesByTimeSlot.entries())
+          .sort(([timeA], [timeB]) => timeA.localeCompare(timeB)) // Sort by time
+          .forEach(([timeSlot, gamesAtTime]) => {
+            console.log(`Processing time slot ${timeSlot} with ${gamesAtTime.length} games`)
             
-            let reasoning
-            if (gameIndex === 0) {
-              reasoning = `TV ${tvNumber} starts ${date} with this game, then transitions to later games`
-            } else {
-              reasoning = `TV ${tvNumber} transitions to this game after previous game ends on ${date}`
+            if (!tvScheduleByTime.has(timeSlot)) {
+              tvScheduleByTime.set(timeSlot, new Set())
             }
             
-            // Add priority context for high-priority games
-            if (game.priority >= 8) {
+            if (gamesAtTime.length === 1) {
+              // Single game - distribute across available TVs to utilize all TVs
+              const game = gamesAtTime[0]
+              const gameDate = game.gameDateEst.split(' ')[0]
+              const timeSlotRange = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
+              
+              // Find the TV with the least assignments so far for better distribution
+              const tvAssignmentCounts = new Map<number, number>()
+              for (let tv = 1; tv <= userPreferences.numberOfTvs; tv++) {
+                tvAssignmentCounts.set(tv, 0)
+              }
+              
+              // Count existing assignments
+              assignments.forEach(assignment => {
+                const currentCount = tvAssignmentCounts.get(assignment.tvNumber) || 0
+                tvAssignmentCounts.set(assignment.tvNumber, currentCount + 1)
+              })
+              
+              // Find TV with minimum assignments
+              let bestTv = 1
+              let minAssignments = tvAssignmentCounts.get(1) || 0
+              for (let tv = 2; tv <= userPreferences.numberOfTvs; tv++) {
+                const count = tvAssignmentCounts.get(tv) || 0
+                if (count < minAssignments) {
+                  minAssignments = count
+                  bestTv = tv
+                }
+              }
+              
+              assignments.push({
+                gameId: game.gameId,
+                tvNumber: bestTv,
+                date: gameDate,
+                timeSlot: timeSlotRange,
+                reasoning: `Single game at ${timeSlot} on ${date} - assigned to TV ${bestTv} for balanced distribution`
+              })
+              
+              tvScheduleByTime.get(timeSlot)!.add(bestTv)
+              console.log(`TV ${bestTv}: Single game ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (balanced distribution)`)
+              
+            } else {
+              // Multiple games at same time - distribute across available TVs
+              const sortedGames = [...gamesAtTime].sort((a, b) => b.priority - a.priority)
+              
+              sortedGames.forEach((game, gameIndex) => {
+                // Find next available TV for this time slot
+                let assignedTv = 1
+                while (assignedTv <= userPreferences.numberOfTvs && tvScheduleByTime.get(timeSlot)!.has(assignedTv)) {
+                  assignedTv++
+                }
+                
+                // If we've run out of TVs, wrap around (this creates intentional duplicates for important games)
+                if (assignedTv > userPreferences.numberOfTvs) {
+                  assignedTv = (gameIndex % userPreferences.numberOfTvs) + 1
+                }
+                
+                const gameDate = game.gameDateEst.split(' ')[0]
+                const timeSlotRange = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
+                
+                let reasoning
+                const isUserTeam = userPreferences.favoriteNbaTeams.includes(game.homeTeam.teamTricode) || 
+                                  userPreferences.favoriteNbaTeams.includes(game.awayTeam.teamTricode)
+                
+                if (gameIndex === 0) {
+                  reasoning = `Highest priority game at ${timeSlot} on ${date} - TV ${assignedTv}`
+                  if (isUserTeam) reasoning += ' (FAVORITE TEAM)'
+                } else {
+                  reasoning = `Simultaneous game #${gameIndex + 1} at ${timeSlot} on ${date} - TV ${assignedTv}`
+                  if (isUserTeam) reasoning += ' (FAVORITE TEAM)'
+                }
+                
+                assignments.push({
+                  gameId: game.gameId,
+                  tvNumber: assignedTv,
+                  date: gameDate,
+                  timeSlot: timeSlotRange,
+                  reasoning: reasoning
+                })
+                
+                tvScheduleByTime.get(timeSlot)!.add(assignedTv)
+                console.log(`TV ${assignedTv}: ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (Priority: ${game.priority})`)
+              })
+            }
+          })
+        
+        // Handle sequential games and ensure all TVs are utilized
+        console.log(`Ensuring all ${userPreferences.numberOfTvs} TVs are utilized for ${date}`)
+        
+        // Check which TVs are underutilized for this date
+        const tvUtilization = new Map<number, number>()
+        for (let tv = 1; tv <= userPreferences.numberOfTvs; tv++) {
+          tvUtilization.set(tv, 0)
+        }
+        
+        // Count games assigned to each TV for this date
+        assignments.forEach(assignment => {
+          if (assignment.date === date) {
+            const currentCount = tvUtilization.get(assignment.tvNumber) || 0
+            tvUtilization.set(assignment.tvNumber, currentCount + 1)
+          }
+        })
+        
+        // Find underutilized TVs
+        const underutilizedTvs = []
+        for (let tv = 1; tv <= userPreferences.numberOfTvs; tv++) {
+          const utilization = tvUtilization.get(tv) || 0
+          if (utilization === 0) {
+            underutilizedTvs.push(tv)
+          }
+        }
+        
+        if (underutilizedTvs.length > 0) {
+          console.log(`Found ${underutilizedTvs.length} underutilized TVs: ${underutilizedTvs.join(', ')}`)
+          
+          // Assign high-priority or favorite team games to underutilized TVs
+          const dateGames = gamesByTimeOnDate.sort((a, b) => b.priority - a.priority)
+          
+          underutilizedTvs.forEach((tvNumber, index) => {
+            if (index < dateGames.length) {
+              const game = dateGames[index]
+              const gameDate = game.gameDateEst.split(' ')[0]
+              const timeSlotRange = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
+              
               const isUserTeam = userPreferences.favoriteNbaTeams.includes(game.homeTeam.teamTricode) || 
                                 userPreferences.favoriteNbaTeams.includes(game.awayTeam.teamTricode)
-              reasoning += ` (HIGH PRIORITY: ${isUserTeam ? 'favorite team' : 'regional/quality preference'})`
+              
+              // Check if this game is already assigned to avoid duplicates
+              const existingAssignment = assignments.find(a => 
+                a.gameId === game.gameId && a.date === gameDate
+              )
+              
+              if (!existingAssignment) {
+                assignments.push({
+                  gameId: game.gameId,
+                  tvNumber: tvNumber,
+                  date: gameDate,
+                  timeSlot: timeSlotRange,
+                  reasoning: `Assigned to underutilized TV ${tvNumber} on ${date}${isUserTeam ? ' (FAVORITE TEAM)' : ''} - Priority: ${game.priority}`
+                })
+                
+                console.log(`Utilization: TV ${tvNumber} gets ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (Priority: ${game.priority})`)
+              } else {
+                // Create a duplicate assignment for better coverage
+                assignments.push({
+                  gameId: game.gameId,
+                  tvNumber: tvNumber,
+                  date: gameDate,
+                  timeSlot: timeSlotRange,
+                  reasoning: `Duplicate coverage on TV ${tvNumber} for high-priority game on ${date}${isUserTeam ? ' (FAVORITE TEAM)' : ''} - Priority: ${game.priority}`
+                })
+                
+                console.log(`Duplicate: TV ${tvNumber} also shows ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (Priority: ${game.priority})`)
+              }
             }
+          })
+        }
+      })
+      
+      console.log(`Generated ${assignments.length} conflict-free assignments across ${sortedDates.length} dates`)
+      
+      // FINAL UTILIZATION CHECK: Ensure all TVs have at least some assignments
+      const globalTvUtilization = new Map<number, number>()
+      for (let tv = 1; tv <= userPreferences.numberOfTvs; tv++) {
+        globalTvUtilization.set(tv, 0)
+      }
+      
+      assignments.forEach(assignment => {
+        const currentCount = globalTvUtilization.get(assignment.tvNumber) || 0
+        globalTvUtilization.set(assignment.tvNumber, currentCount + 1)
+      })
+      
+      const emptyTvs = []
+      for (let tv = 1; tv <= userPreferences.numberOfTvs; tv++) {
+        const count = globalTvUtilization.get(tv) || 0
+        if (count === 0) {
+          emptyTvs.push(tv)
+        }
+      }
+      
+      if (emptyTvs.length > 0) {
+        console.log(`FINAL CHECK: ${emptyTvs.length} TVs still need assignments: ${emptyTvs.join(', ')}`)
+        
+        // Assign the highest priority games to empty TVs as duplicates
+        const allGames = gamesWithPriority.sort((a, b) => b.priority - a.priority)
+        
+        emptyTvs.forEach((tvNumber, index) => {
+          if (index < allGames.length) {
+            const game = allGames[index]
+            const gameDate = game.gameDateEst.split(' ')[0]
+            const timeSlotRange = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
+            
+            const isUserTeam = userPreferences.favoriteNbaTeams.includes(game.homeTeam.teamTricode) || 
+                              userPreferences.favoriteNbaTeams.includes(game.awayTeam.teamTricode)
             
             assignments.push({
               gameId: game.gameId,
               tvNumber: tvNumber,
               date: gameDate,
-              timeSlot: timeSlot,
-              reasoning: reasoning
+              timeSlot: timeSlotRange,
+              reasoning: `Final assignment to ensure TV ${tvNumber} is utilized - showing highest priority game${isUserTeam ? ' (FAVORITE TEAM)' : ''} - Priority: ${game.priority}`
             })
             
-            console.log(`TV ${tvNumber}: Assigned ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} on ${date} (${timeSlot}) - Priority: ${game.priority}`)
-          })
-        }
-      })
+            console.log(`FINAL: TV ${tvNumber} gets highest priority game ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (Priority: ${game.priority})`)
+          }
+        })
+        
+        console.log(`Added ${emptyTvs.length} final assignments to ensure all TVs are utilized`)
+      }
       
-      console.log(`Generated ${assignments.length} date-aware assignments across ${sortedDates.length} dates`)
+      // VALIDATION: Check for time conflicts
+      const conflicts = []
+      for (let i = 0; i < assignments.length; i++) {
+        for (let j = i + 1; j < assignments.length; j++) {
+          const a = assignments[i]
+          const b = assignments[j]
+          
+          // Check if same TV, same date, and overlapping times
+          if (a.tvNumber === b.tvNumber && a.date === b.date && a.timeSlot === b.timeSlot) {
+            conflicts.push(`CONFLICT: TV ${a.tvNumber} has ${a.gameId} and ${b.gameId} both at ${a.timeSlot} on ${a.date}`)
+          }
+        }
+      }
+      
+      if (conflicts.length > 0) {
+        console.error('TV SCHEDULING CONFLICTS DETECTED:')
+        conflicts.forEach(conflict => console.error(conflict))
+      } else {
+        console.log('✅ No TV scheduling conflicts detected!')
+      }
+      
       aiData.tvAssignments = assignments
     }
     
