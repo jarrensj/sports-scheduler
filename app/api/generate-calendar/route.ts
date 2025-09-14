@@ -376,6 +376,8 @@ ${gamesOnDate.map((game, index) => `
 `).join('')}`
 }).join('\n')}
 
+CRITICAL: Respond with ONLY valid JSON. No extra text before or after.
+
 Please respond with a JSON object containing:
 {
   "tvAssignments": [
@@ -406,6 +408,13 @@ Please respond with a JSON object containing:
   ],
   "weekSummary": "Week-long TV schedule organized by date with no cross-date conflicts"
 }
+
+JSON FORMATTING REQUIREMENTS:
+- All strings must be properly quoted with double quotes
+- No trailing commas in arrays or objects
+- Escape any quotes within string values with backslash
+- Complete all reasoning strings - do not leave them incomplete
+- Ensure all objects and arrays are properly closed
 
 Focus on:
 - MANDATORY TV TRANSITIONS: Every TV must show ALL games on each date in chronological order
@@ -453,13 +462,28 @@ Focus on:
       
       // Try to extract JSON from the response (sometimes AI includes extra text)
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
-      const jsonString = jsonMatch ? jsonMatch[0] : aiResponse
+      let jsonString = jsonMatch ? jsonMatch[0] : aiResponse
       
+      // Clean up common JSON issues from AI responses
+      jsonString = jsonString
+        .replace(/,\s*}/g, '}') // Remove trailing commas before closing braces
+        .replace(/,\s*]/g, ']') // Remove trailing commas before closing brackets
+        .replace(/"reasoning"\s*:\s*"([^"]*?)"\s*$/m, '"reasoning": "$1"') // Fix incomplete reasoning fields
+        .replace(/"\s*\n\s*}/g, '"}') // Fix missing closing quotes before closing braces
+      
+      console.log('Cleaned JSON string:', jsonString)
       aiData = JSON.parse(jsonString)
     } catch (error) {
-      console.error('Failed to parse AI response:', aiResponse)
+      console.error('Failed to parse AI response after cleanup:', jsonString)
       console.error('Parse error:', error)
-      throw new Error(`Invalid JSON response from AI: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      
+      // Fallback: Use our forced distribution logic
+      console.warn('Using fallback distribution due to JSON parse error')
+      aiData = {
+        tvAssignments: [],
+        recommendations: ['AI response parsing failed - using automatic assignments'],
+        weekSummary: `Automatic viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)} (AI parsing failed)`
+      }
     }
 
     // Ensure aiData has the expected structure
