@@ -270,6 +270,34 @@ export default function Schedule() {
     }
   }
 
+  // Helper function to calculate game end time (3.5 hours after start)
+  const getEndTime = (startTime: string) => {
+    try {
+      // Parse time like "7:00 pm ET"
+      const timeMatch = startTime.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+      if (!timeMatch) return 'End Time TBD'
+      
+      let hours = parseInt(timeMatch[1])
+      const minutes = parseInt(timeMatch[2])
+      const period = timeMatch[3].toLowerCase()
+      
+      if (period === 'pm' && hours !== 12) hours += 12
+      if (period === 'am' && hours === 12) hours = 0
+      
+      // Add 3.5 hours
+      const totalMinutes = hours * 60 + minutes + (3.5 * 60)
+      const endHours = Math.floor(totalMinutes / 60) % 24
+      const endMins = Math.floor(totalMinutes % 60)
+      
+      const endPeriod = endHours >= 12 ? 'pm' : 'am'
+      const displayHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours
+      
+      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} ET`
+    } catch {
+      return 'End Time TBD'
+    }
+  }
+
   // Time-based positioning helpers
   const parseGameTime = (gameStatusText: string) => {
     // Parse time from formats like "12:00 pm ET", "10:30 pm ET", etc.
@@ -861,7 +889,11 @@ export default function Schedule() {
                             <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
                               {day.games.map((game) => {
                                 const position = getGamePosition(game, day.games)
-                                // Always use optimized data for this calendar
+                                // Find ALL TVs that show this game
+                                const allTvsForGame = generatedCalendar.optimizedGames
+                                  ?.filter(og => og.gameId === game.gameId)
+                                  ?.map(og => og.tvAssignment) || []
+                                
                                 const optimizedGame = generatedCalendar.optimizedGames?.find(og => og.gameId === game.gameId)
                                 return (
                                   <GameCalendarCard
@@ -870,7 +902,7 @@ export default function Schedule() {
                                     position={position}
                                     onGameClick={openGameModal}
                                     optimizedColor={optimizedGame?.color || 'rgb(200, 200, 200)'}
-                                    tvAssignment={optimizedGame?.tvAssignment || 1}
+                                    tvAssignments={allTvsForGame}
                                     priority={optimizedGame?.priority || 5}
                                   />
                                 )
@@ -1580,6 +1612,97 @@ export default function Schedule() {
                         </div>
                       )
                     })()}
+
+                    {/* Daily TV Programming Guide */}
+                    <div className="bg-green-50 rounded-lg p-4 mb-6">
+                      <h4 className="font-semibold text-green-900 mb-3">📺 Daily TV Programming Guide</h4>
+                      <div className="space-y-4">
+                        {weeks[currentWeek].days.map((day, dayIndex) => {
+                          const dayName = day.date.toLocaleDateString('en-US', { weekday: 'long' })
+                          const dayGames = day.games
+                          
+                          if (dayGames.length === 0) {
+                            return (
+                              <div key={dayIndex} className="bg-white rounded-lg p-3 border border-green-200">
+                                <h5 className="font-semibold text-green-800 mb-2">{dayName} - {day.date.toLocaleDateString()}</h5>
+                                <p className="text-green-600 text-sm">No games scheduled</p>
+                              </div>
+                            )
+                          }
+
+                          // Sort games by time for this day
+                          const sortedDayGames = [...dayGames].sort((a, b) => a.gameStatusText.localeCompare(b.gameStatusText))
+                          
+                          // Create TV schedule for this day
+                          const tvScheduleForDay: { [tvNumber: number]: Array<{ game: any; timeSlot: string }> } = {}
+                          
+                          // Initialize all TVs
+                          for (let i = 1; i <= (userPreferences?.numberOfTvs || 1); i++) {
+                            tvScheduleForDay[i] = []
+                          }
+                          
+                          // Distribute games throughout the day
+                          sortedDayGames.forEach((game, gameIndex) => {
+                            const gameStartTime = game.gameStatusText
+                            
+                            // Calculate which TVs should show this game
+                            const numTvs = userPreferences?.numberOfTvs || 1
+                            
+                            if (sortedDayGames.length === 1) {
+                              // One game - all TVs show it
+                              for (let tv = 1; tv <= numTvs; tv++) {
+                                tvScheduleForDay[tv].push({
+                                  game,
+                                  timeSlot: `${gameStartTime} - ${getEndTime(gameStartTime)}`
+                                })
+                              }
+                            } else if (sortedDayGames.length === 2) {
+                              // Two games - split TVs
+                              const tvsPerGame = Math.ceil(numTvs / 2)
+                              const startTv = gameIndex === 0 ? 1 : tvsPerGame + 1
+                              const endTv = gameIndex === 0 ? tvsPerGame : numTvs
+                              
+                              for (let tv = startTv; tv <= endTv; tv++) {
+                                tvScheduleForDay[tv].push({
+                                  game,
+                                  timeSlot: `${gameStartTime} - ${getEndTime(gameStartTime)}`
+                                })
+                              }
+                            } else {
+                              // Multiple games - round robin
+                              const tvNumber = (gameIndex % numTvs) + 1
+                              tvScheduleForDay[tvNumber].push({
+                                game,
+                                timeSlot: `${gameStartTime} - ${getEndTime(gameStartTime)}`
+                              })
+                            }
+                          })
+
+                          return (
+                            <div key={dayIndex} className="bg-white rounded-lg p-3 border border-green-200">
+                              <h5 className="font-semibold text-green-800 mb-3">{dayName} - {day.date.toLocaleDateString()}</h5>
+                              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                                {Object.entries(tvScheduleForDay).map(([tvNum, schedule]) => (
+                                  <div key={tvNum} className="bg-gray-50 rounded p-2">
+                                    <div className="font-bold text-gray-800 mb-1">TV {tvNum}</div>
+                                    {schedule.length > 0 ? (
+                                      schedule.map((item, idx) => (
+                                        <div key={idx} className="text-gray-600 mb-1">
+                                          <div className="font-medium">{item.timeSlot}</div>
+                                          <div>{item.game.awayTeam.teamTricode} @ {item.game.homeTeam.teamTricode}</div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-gray-400">No games</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
 
                     {/* Recommendations */}
                     <div className="bg-blue-50 rounded-lg p-4 mb-6">
