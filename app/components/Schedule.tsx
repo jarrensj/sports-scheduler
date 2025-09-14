@@ -964,7 +964,7 @@ export default function Schedule() {
           </div>
           
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Automated TV Plan Scheduler
+            Automated Agentic TV Plan Scheduler
           </h1>
           <p className="text-gray-600 mb-4">
             Last updated: {new Date(scheduleData.meta.time).toLocaleString()}
