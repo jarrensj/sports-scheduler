@@ -116,7 +116,7 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
 
   const cardClassName = optimizedColor ? 
     "absolute border-2 rounded-lg p-2 text-xs hover:shadow-lg transition-all hover:z-20 cursor-pointer transform hover:scale-105" :
-    "absolute animated-blue-bg border-2 border-blue-200 rounded-lg p-2 text-xs hover:shadow-lg hover:border-blue-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+    "absolute bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
 
   return (
     <div
