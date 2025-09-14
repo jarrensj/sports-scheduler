@@ -240,21 +240,29 @@ function generateOptimizedEmailHTML(weekData: WeekData) {
       .map(([tvNumber, games]) => {
         const gamesList = games as Array<Game & { priority?: number; color?: string; reasoning?: string }>
         
-        const gamesHTML = gamesList.map(game => `
-          <div style="background-color: #f8fafc; border-left: 4px solid ${game.color || '#3b82f6'}; padding: 12px; margin-bottom: 8px; border-radius: 6px;">
-            <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">
-              ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}
-            </div>
-            <div style="color: #6b7280; font-size: 14px;">
-              ${formatGameTime(game.gameStatusText)}
-            </div>
-            ${game.reasoning && !game.reasoning.includes('duplicate') ? `
-              <div style="color: #6b7280; font-size: 12px; margin-top: 4px; font-style: italic;">
-                ${game.reasoning}
+        const gamesHTML = gamesList.map(game => {
+          // Convert priority to stars (1-10 scale to 1-5 stars)
+          const priority = game.priority || 5
+          const stars = Math.round(priority / 2) // Convert 1-10 to 1-5 stars
+          const starDisplay = '⭐'.repeat(Math.max(1, Math.min(5, stars))) // Ensure 1-5 stars
+          
+          return `
+            <div style="background-color: #f8fafc; border-left: 4px solid ${game.color || '#3b82f6'}; padding: 12px; margin-bottom: 8px; border-radius: 6px;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+                <span>${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}</span>
+                <span style="font-size: 16px;" title="Priority: ${priority}/10">${starDisplay}</span>
               </div>
-            ` : ''}
-          </div>
-        `).join('')
+              <div style="color: #6b7280; font-size: 14px;">
+                ${formatGameTime(game.gameStatusText)}
+              </div>
+              ${game.reasoning && !game.reasoning.includes('duplicate') ? `
+                <div style="color: #6b7280; font-size: 12px; margin-top: 4px; font-style: italic;">
+                  ${game.reasoning}
+                </div>
+              ` : ''}
+            </div>
+          `
+        }).join('')
 
         return `
           <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
