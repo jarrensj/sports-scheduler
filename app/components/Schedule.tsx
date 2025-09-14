@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { GameCalendarCard } from './GameCalendarCard'
+import { getTeamLogo } from '@/lib/utils'
 
 interface Team {
   teamId: number
@@ -100,6 +101,86 @@ interface ScheduleData {
 
 export default function Schedule() {
   const router = useRouter()
+
+  // Helper function to convert game time from ET to PT for display
+  const convertToPacificTime = (gameStatusText: string) => {
+    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (!timeMatch) return gameStatusText
+    
+    let hours = parseInt(timeMatch[1])
+    const minutes = parseInt(timeMatch[2])
+    const period = timeMatch[3].toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    // Convert from ET to PT (subtract 3 hours)
+    hours = (hours - 3 + 24) % 24
+    
+    const displayPeriod = hours >= 12 ? 'pm' : 'am'
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+    
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${displayPeriod} PT`
+  }
+
+  // Helper function to determine if a game should be shown based on filters
+  const shouldShowGame = (game: Game) => {
+    if (!userPreferences) return true
+
+    const isFavoriteGame = userPreferences.favoriteNbaTeams.includes(game.homeTeam.teamTricode) || 
+                          userPreferences.favoriteNbaTeams.includes(game.awayTeam.teamTricode)
+    
+    const getAllBroadcasters = (broadcasters: Broadcasters) => {
+      const allBroadcasters = [
+        ...broadcasters.nationalBroadcasters,
+        ...broadcasters.homeTvBroadcasters,
+        ...broadcasters.homeRadioBroadcasters,
+        ...broadcasters.awayTvBroadcasters,
+        ...broadcasters.awayRadioBroadcasters
+      ]
+      
+      return allBroadcasters
+        .filter(broadcaster => broadcaster.broadcasterDisplay !== 'TBD' && broadcaster.broadcasterDisplay)
+        .map(broadcaster => broadcaster.broadcasterDisplay)
+    }
+
+    const hasBroadcastInfo = getAllBroadcasters(game.broadcasters).length > 0
+    const hasAwayTvBroadcast = game.broadcasters.awayTvBroadcasters.some(
+      broadcaster => broadcaster.broadcasterDisplay !== 'TBD' && broadcaster.broadcasterDisplay
+    )
+
+    // Check filters based on game type
+    if (isFavoriteGame && !gameFilters.showFavorite) return false
+    if (hasAwayTvBroadcast && !gameFilters.showAwayTv) return false
+    if (!hasBroadcastInfo && !gameFilters.showTbd) return false
+    if (hasBroadcastInfo && !hasAwayTvBroadcast && !isFavoriteGame && !gameFilters.showRegular) return false
+
+    return true
+  }
+
+  // Helper function to calculate dynamic time range for a week
+  const getWeekTimeRange = (weekGames: Game[]) => {
+    const validGames = weekGames.filter(g => parseGameTime(g.gameStatusText) !== null)
+    
+    if (validGames.length === 0) {
+      // Default range if no valid games
+      return { startTime: 6 * 60, endTime: 26 * 60 } // 6 AM to 2 AM next day
+    }
+
+    const gameTimes = validGames.map(g => {
+      const time = parseGameTime(g.gameStatusText)!
+      return time < 6 * 60 ? time + 24 * 60 : time // Adjust for times after midnight
+    })
+
+    const earliestGame = Math.min(...gameTimes)
+    const latestGame = Math.max(...gameTimes)
+
+    // Add 1 hour buffer before earliest and after latest
+    const startTime = Math.max(0, earliestGame - 60) // 1 hour before earliest
+    const endTime = Math.min(24 * 60, latestGame + 60) // 1 hour after latest
+
+    return { startTime, endTime }
+  }
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -131,6 +212,12 @@ export default function Schedule() {
     favoriteNbaTeams: string[]
     zipCode: string
   } | null>(null)
+  const [gameFilters, setGameFilters] = useState({
+    showRegular: true,      // Light blue - Game On Air
+    showFavorite: true,     // Dark blue - Favorite Team
+    showTbd: true,          // Yellow - Network TBD
+    showAwayTv: true        // Red - Not Airing Locally
+  })
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -212,7 +299,7 @@ export default function Schedule() {
   }, [])
 
   const formatGameTime = (gameStatusText: string) => {
-    return gameStatusText
+    return convertToPacificTime(gameStatusText)
   }
 
   const formatDate = (dateString: string) => {
@@ -406,7 +493,7 @@ export default function Schedule() {
     }
   }
 
-  // Helper function to calculate game end time (3.5 hours after start)
+  // Helper function to calculate game end time (3.5 hours after start) in Pacific Time
   const getEndTime = (startTime: string) => {
     try {
       // Parse time like "7:00 pm ET"
@@ -420,7 +507,10 @@ export default function Schedule() {
       if (period === 'pm' && hours !== 12) hours += 12
       if (period === 'am' && hours === 12) hours = 0
       
-      // Add 3.5 hours
+      // Convert from ET to PT (subtract 3 hours)
+      hours = (hours - 3 + 24) % 24
+      
+      // Add 3.5 hours for game duration
       const totalMinutes = hours * 60 + minutes + (3.5 * 60)
       const endHours = Math.floor(totalMinutes / 60) % 24
       const endMins = Math.floor(totalMinutes % 60)
@@ -428,7 +518,7 @@ export default function Schedule() {
       const endPeriod = endHours >= 12 ? 'pm' : 'am'
       const displayHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours
       
-      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} ET`
+      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} PT`
     } catch {
       return 'End Time TBD'
     }
@@ -447,16 +537,20 @@ export default function Schedule() {
     if (period === 'pm' && hours !== 12) hours += 12
     if (period === 'am' && hours === 12) hours = 0
     
-    return hours * 60 + minutes // Return minutes from midnight
+    // Convert from ET to PT (subtract 3 hours)
+    hours = (hours - 3 + 24) % 24
+    
+    return hours * 60 + minutes // Return minutes from midnight in PT
   }
 
-  const getGamePosition = (game: Game, dayGames: Game[]) => {
+  const getGamePosition = (game: Game, dayGames: Game[], weekGames?: Game[]) => {
     const gameTime = parseGameTime(game.gameStatusText)
     if (gameTime === null) return { top: 0, left: 0, width: 100 }
     
-    // Define time range (6 AM to 2 AM next day = 20 hours)
-    const startTime = 6 * 60 // 6 AM in minutes
-    const endTime = 26 * 60 // 2 AM next day (26:00) in minutes
+    // Use dynamic time range if weekGames provided, otherwise use default
+    const timeRange = weekGames ? getWeekTimeRange(weekGames) : { startTime: 6 * 60, endTime: 26 * 60 }
+    const startTime = timeRange.startTime
+    const endTime = timeRange.endTime
     const totalRange = endTime - startTime
     
     // Adjust for times after midnight
@@ -527,24 +621,26 @@ export default function Schedule() {
   }
 
   // Generate time grid lines
-  const getTimeGridLines = () => {
+  const getTimeGridLines = (startTime: number, endTime: number) => {
     const lines = []
-    // From 6 AM to 2 AM next day
-    for (let hour = 6; hour <= 26; hour += 2) {
-      const displayHour = hour > 24 ? hour - 24 : hour
-      const period = hour >= 12 && hour < 24 ? 'PM' : 'AM'
-      const displayHour12 = displayHour === 0 ? 12 : displayHour > 12 ? displayHour - 12 : displayHour
+    const totalRange = endTime - startTime
+    
+    // Generate grid lines every 2 hours within the range
+    for (let time = startTime; time <= endTime; time += 120) { // 120 minutes = 2 hours
+      const displayHour = Math.floor(time / 60)
+      const displayMinute = time % 60
+      const hour24 = displayHour % 24
+      const period = hour24 >= 12 ? 'PM' : 'AM'
+      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
       
-      const position = ((hour - 6) / 20) * 100
+      const position = ((time - startTime) / totalRange) * 100
       lines.push({
         position,
-        label: `${displayHour12}${period}`
+        label: `${hour12}${period}`
       })
     }
     return lines
   }
-
-  const timeGridLines = getTimeGridLines()
 
   // Modal handlers
   const openGameModal = (game: Game) => {
@@ -610,7 +706,16 @@ export default function Schedule() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to send email')
+        if (result.verifiedEmail && result.attemptedEmail) {
+          // Handle email restriction error
+          setEmailStatus({ 
+            type: 'error', 
+            message: `Email restriction: You can only send emails to your verified address (${result.verifiedEmail}). To send emails to other recipients, please verify a domain at resend.com/domains.` 
+          })
+        } else {
+          throw new Error(result.error || 'Failed to send email')
+        }
+        return
       }
 
       setEmailStatus({ 
@@ -690,7 +795,16 @@ export default function Schedule() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to send email')
+        if (result.verifiedEmail && result.attemptedEmail) {
+          // Handle email restriction error
+          setEmailStatus({ 
+            type: 'error', 
+            message: `Email restriction: You can only send emails to your verified address (${result.verifiedEmail}). To send emails to other recipients, please verify a domain at resend.com/domains.` 
+          })
+        } else {
+          throw new Error(result.error || 'Failed to send email')
+        }
+        return
       }
 
       setEmailStatus({ 
@@ -883,6 +997,15 @@ export default function Schedule() {
             </button>
           </div>
           
+          {/* Weeklysports.tv Logo */}
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/logo.svg" 
+              alt="Weeklysports.tv" 
+              className="h-16 w-auto"
+            />
+          </div>
+          
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Automated TV Plan Scheduler
           </h1>
@@ -995,6 +1118,60 @@ export default function Schedule() {
                   </button>
                 </div>
 
+                {/* Game Filters */}
+                <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Filter Games</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {/* Light Blue - Game On Air */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showRegular}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showRegular: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200"></div>
+                      <span className="text-xs text-gray-600">Game On Air</span>
+                    </label>
+                    
+                    {/* Dark Blue - Favorite Team */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showFavorite}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showFavorite: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-200 to-blue-300 border-2 border-blue-400"></div>
+                      <span className="text-xs text-gray-600">Favorite Team</span>
+                    </label>
+                    
+                    {/* Yellow - Network TBD */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showTbd}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showTbd: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-200"></div>
+                      <span className="text-xs text-gray-600">Network TBD</span>
+                    </label>
+                    
+                    {/* Red - Not Airing Locally */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showAwayTv}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showAwayTv: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200"></div>
+                      <span className="text-xs text-gray-600">Not Airing Locally</span>
+                    </label>
+                  </div>
+                </div>
+
                 {/* Calendar Grid */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                   {/* Day Headers */}
@@ -1009,51 +1186,72 @@ export default function Schedule() {
 
                   {/* Calendar Days */}
                   <div className="grid grid-cols-7">
-                    {weeks[currentWeek].days.map((day, dayIndex) => (
-                      <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
-                        {/* Date Header */}
-                        <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
-                          <span className="text-sm font-medium text-gray-900">
-                            {day.date.getDate()}
-                          </span>
-                          {day.games.length > 0 && (
-                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                              {day.games.length}
+                    {(() => {
+                      // Calculate dynamic time range for the current week
+                      const allWeekGames = weeks[currentWeek].days.flatMap(day => day.games)
+                      const timeRange = getWeekTimeRange(allWeekGames)
+                      const timeGridLines = getTimeGridLines(timeRange.startTime, timeRange.endTime)
+                      
+                      return weeks[currentWeek].days.map((day, dayIndex) => (
+                        <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
+                          {/* Date Header */}
+                          <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
+                            <span className="text-sm font-medium text-gray-900">
+                              {day.date.getDate()}
                             </span>
-                          )}
-                        </div>
-
-                        {/* Time Grid Lines */}
-                        <div className="absolute inset-0 top-10 pointer-events-none">
-                          {timeGridLines.map((line, lineIndex) => (
-                            <div
-                              key={lineIndex}
-                              className="absolute w-full border-t border-gray-100"
-                              style={{ top: `${line.position}%` }}
-                            >
-                              <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
-                                {line.label}
+                            {day.games.length > 0 && (
+                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                {day.games.length}
                               </span>
-                            </div>
-                          ))}
-                        </div>
+                            )}
+                          </div>
 
-                        {/* Games positioned by time */}
-                        <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
-                          {day.games.map((game) => {
-                            const position = getGamePosition(game, day.games)
-                            return (
-                              <GameCalendarCard
-                                key={game.gameId}
-                                game={game}
-                                position={position}
-                                onGameClick={openGameModal}
-                              />
-                            )
-                          })}
+                          {/* Time Grid Lines */}
+                          <div className="absolute inset-0 top-10 pointer-events-none">
+                            {timeGridLines.map((line, lineIndex) => (
+                              <div
+                                key={lineIndex}
+                                className="absolute w-full border-t border-gray-100"
+                                style={{ top: `${line.position}%` }}
+                              >
+                                <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
+                                  {line.label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Games positioned by time */}
+                          <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
+                            {(() => {
+                              const filteredGames = day.games.filter(shouldShowGame)
+                              return filteredGames.map((game) => {
+                                const position = getGamePosition(game, filteredGames, allWeekGames)
+                                
+                                // Get TV assignments for this game from the optimized calendar
+                                const tvAssignments = generatedCalendar ? 
+                                  Object.entries(generatedCalendar.tvSchedule)
+                                    .filter(([_, games]) => games.some(g => g.gameId === game.gameId))
+                                    .map(([tvNumber, _]) => parseInt(tvNumber))
+                                    .sort((a, b) => a - b)
+                                  : undefined
+                                
+                                return (
+                                  <GameCalendarCard
+                                    key={game.gameId}
+                                    game={game}
+                                    position={position}
+                                    onGameClick={openGameModal}
+                                    favoriteTeams={userPreferences?.favoriteNbaTeams || []}
+                                    tvAssignments={tvAssignments}
+                                  />
+                                )
+                              })
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    })()}
                   </div>
                 </div>
 
@@ -1177,13 +1375,17 @@ export default function Schedule() {
                                             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
                                               {new Date(game.assignedDate || game.gameDateEst).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
                                             </span>
+                                            {/* TV Assignment Badge */}
+                                            <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
+                                              TV {game.tvAssignment}
+                                            </span>
                                             <div className="text-2xl font-bold text-gray-900">
                                               {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
                                             </div>
                                           </div>
                                           
                                           <div className="text-lg text-gray-700 font-medium mb-3">
-                                            {game.assignedTimeSlot || game.gameStatusText}
+                                            {game.assignedTimeSlot || convertToPacificTime(game.gameStatusText)}
                                           </div>
                                           
                                           <div className="text-sm text-gray-600 bg-white rounded-lg px-4 py-3 italic">
@@ -1228,7 +1430,7 @@ export default function Schedule() {
                         <div className="flex flex-col sm:flex-row gap-3">
                           <input
                             type="email"
-                            placeholder="Enter your email address"
+                            placeholder="Enter your email address (viet@vietnoms.com)"
                             value={emailAddress}
                             onChange={(e) => setEmailAddress(e.target.value)}
                             className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none text-base"
@@ -1279,6 +1481,7 @@ export default function Schedule() {
                     </div>
                   </div>
                 )}
+
               </>
             )}
           </div>
@@ -1288,27 +1491,27 @@ export default function Schedule() {
             {allGameDates.length > 0 && (
               <>
                 {/* Day Navigation */}
-                <div className="flex justify-between items-center mb-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-sm">
                   <button
                     onClick={goToPrevDay}
                     disabled={currentDay === 0}
-                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                       currentDay === 0
-                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
-                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                     <span>Previous Day</span>
                   </button>
 
                   <div className="text-center">
-                    <h1 className="text-3xl font-bold mb-2">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
                       📺 {allGameDates[currentDay]?.dateString}
                     </h1>
-                    <p className="text-blue-100 text-lg font-medium">
+                    <p className="text-gray-600 text-sm">
                       Day {currentDay + 1} of {totalDays} • {allGameDates[currentDay]?.games.length} games today
                     </p>
                   </div>
@@ -1316,15 +1519,15 @@ export default function Schedule() {
                   <button
                     onClick={goToNextDay}
                     disabled={currentDay === totalDays - 1}
-                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                       currentDay === totalDays - 1
-                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
-                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
                     <span>Next Day</span>
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
                 </div>
@@ -1364,8 +1567,15 @@ export default function Schedule() {
                             {/* Away Team */}
                             <div className="text-center flex-1">
                               <div className="text-sm text-gray-500 font-medium mb-2">AWAY</div>
-                              <div className="text-2xl font-black text-gray-900 mb-2">
-                                {game.awayTeam.teamTricode}
+                              <div className="flex items-center justify-center mb-3">
+                                <img 
+                                  src={getTeamLogo(game.awayTeam.teamTricode)} 
+                                  alt={`${game.awayTeam.teamTricode} logo`}
+                                  className="w-12 h-12 object-contain mr-3"
+                                />
+                                <div className="text-2xl font-black text-gray-900">
+                                  {game.awayTeam.teamTricode}
+                                </div>
                               </div>
                               <div className="text-lg text-gray-700 font-medium">
                                 {game.awayTeam.teamCity}
@@ -1386,8 +1596,15 @@ export default function Schedule() {
                             {/* Home Team */}
                             <div className="text-center flex-1">
                               <div className="text-sm text-gray-500 font-medium mb-2">HOME</div>
-                              <div className="text-2xl font-black text-gray-900 mb-2">
-                                {game.homeTeam.teamTricode}
+                              <div className="flex items-center justify-center mb-3">
+                                <img 
+                                  src={getTeamLogo(game.homeTeam.teamTricode)} 
+                                  alt={`${game.homeTeam.teamTricode} logo`}
+                                  className="w-12 h-12 object-contain mr-3"
+                                />
+                                <div className="text-2xl font-black text-gray-900">
+                                  {game.homeTeam.teamTricode}
+                                </div>
                               </div>
                               <div className="text-lg text-gray-700 font-medium">
                                 {game.homeTeam.teamCity}
@@ -1429,9 +1646,12 @@ export default function Schedule() {
                             {getAllBroadcasters(game.broadcasters).length > 0 ? (
                               <div className="flex flex-wrap gap-2 justify-center">
                                 {getAllBroadcasters(game.broadcasters).slice(0, 4).map((broadcaster, idx) => (
-                                  <span key={idx} className="bg-green-600 text-white px-4 py-2 rounded-full text-base font-bold">
-                                    {broadcaster}
-                                  </span>
+                                  <div key={idx} className="bg-green-600 text-white px-4 py-2 rounded-full text-base font-bold flex items-center space-x-2">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                    <span>{broadcaster}</span>
+                                  </div>
                                 ))}
                                 {getAllBroadcasters(game.broadcasters).length > 4 && (
                                   <span className="bg-green-500 text-white px-4 py-2 rounded-full text-base font-bold">
@@ -1512,6 +1732,11 @@ export default function Schedule() {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center space-x-3">
                               <span className="text-sm text-gray-500 w-12">Away:</span>
+                              <img 
+                                src={getTeamLogo(game.awayTeam.teamTricode)} 
+                                alt={`${game.awayTeam.teamTricode} logo`}
+                                className="w-6 h-6 object-contain"
+                              />
                               <span className="font-semibold text-gray-900">
                                 {game.awayTeam.teamCity} {game.awayTeam.teamName}
                               </span>
@@ -1523,6 +1748,11 @@ export default function Schedule() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                               <span className="text-sm text-gray-500 w-12">Home:</span>
+                              <img 
+                                src={getTeamLogo(game.homeTeam.teamTricode)} 
+                                alt={`${game.homeTeam.teamTricode} logo`}
+                                className="w-6 h-6 object-contain"
+                              />
                               <span className="font-semibold text-gray-900">
                                 {game.homeTeam.teamCity} {game.homeTeam.teamName}
                               </span>
@@ -1564,9 +1794,12 @@ export default function Schedule() {
                               {getAllBroadcasters(game.broadcasters).length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                   {getAllBroadcasters(game.broadcasters).map((broadcaster, idx) => (
-                                    <span key={idx} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                                      {broadcaster}
-                                    </span>
+                                    <div key={idx} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs flex items-center space-x-1">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                      </svg>
+                                      <span>{broadcaster}</span>
+                                    </div>
                                   ))}
                                 </div>
                               ) : (
@@ -1717,7 +1950,7 @@ export default function Schedule() {
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center space-x-3 bg-blue-50 px-4 py-2 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">
-                      {selectedGame.gameStatusText}
+                      {convertToPacificTime(selectedGame.gameStatusText)}
                     </div>
                     <div className="text-gray-600">
                       {formatDate(selectedGame.gameDateEst)}
@@ -1732,8 +1965,15 @@ export default function Schedule() {
                     {/* Away Team */}
                     <div className="text-center flex-1">
                       <div className="text-sm text-gray-500 mb-1">Away</div>
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {selectedGame.awayTeam.teamCity} {selectedGame.awayTeam.teamName}
+                      <div className="flex items-center justify-center space-x-2 mb-1">
+                        <img 
+                          src={getTeamLogo(selectedGame.awayTeam.teamTricode)} 
+                          alt={`${selectedGame.awayTeam.teamTricode} logo`}
+                          className="w-8 h-8 object-contain"
+                        />
+                        <div className="text-xl font-bold text-gray-900">
+                          {selectedGame.awayTeam.teamCity} {selectedGame.awayTeam.teamName}
+                        </div>
                       </div>
                       <div className="bg-gray-200 text-gray-700 px-3 py-1 rounded font-mono text-sm">
                         {selectedGame.awayTeam.teamTricode}
@@ -1751,8 +1991,15 @@ export default function Schedule() {
                     {/* Home Team */}
                     <div className="text-center flex-1">
                       <div className="text-sm text-gray-500 mb-1">Home</div>
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {selectedGame.homeTeam.teamCity} {selectedGame.homeTeam.teamName}
+                      <div className="flex items-center justify-center space-x-2 mb-1">
+                        <img 
+                          src={getTeamLogo(selectedGame.homeTeam.teamTricode)} 
+                          alt={`${selectedGame.homeTeam.teamTricode} logo`}
+                          className="w-8 h-8 object-contain"
+                        />
+                        <div className="text-xl font-bold text-gray-900">
+                          {selectedGame.homeTeam.teamCity} {selectedGame.homeTeam.teamName}
+                        </div>
                       </div>
                       <div className="bg-gray-200 text-gray-700 px-3 py-1 rounded font-mono text-sm">
                         {selectedGame.homeTeam.teamTricode}
@@ -1832,9 +2079,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">National TV</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.nationalBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1846,9 +2096,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Home TV</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.homeTvBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1860,9 +2113,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Home Radio</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.homeRadioBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-purple-100 text-purple-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-purple-100 text-purple-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1874,9 +2130,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Away TV</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.awayTvBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-orange-100 text-orange-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-orange-100 text-orange-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1888,9 +2147,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Away Radio</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.awayRadioBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-red-100 text-red-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-red-100 text-red-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -2043,11 +2305,16 @@ export default function Schedule() {
                               <div key={game.gameId} className="bg-white rounded-lg p-3 border-l-4" style={{ borderLeftColor: game.color }}>
                                 <div className="flex justify-between items-center">
                                   <div>
-                                    <div className="font-medium text-gray-900">
-                                      {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                    <div className="flex items-center space-x-2 mb-1">
+                                      <div className="font-medium text-gray-900">
+                                        {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                      </div>
+                                      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">
+                                        TV {game.tvAssignment}
+                                      </span>
                                     </div>
                                     <div className="text-sm text-gray-600">
-                                      {game.gameStatusText}
+                                      {convertToPacificTime(game.gameStatusText)}
                                     </div>
                                   </div>
                                   <div className="text-right">
@@ -2091,7 +2358,7 @@ export default function Schedule() {
                       <div className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="email"
-                          placeholder="Enter your email address"
+                          placeholder="Enter your email address (viet@vietnoms.com)"
                           value={emailAddress}
                           onChange={(e) => setEmailAddress(e.target.value)}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -2196,7 +2463,7 @@ export default function Schedule() {
                     type="email"
                     value={emailAddress}
                     onChange={(e) => setEmailAddress(e.target.value)}
-                    placeholder="Enter your email address"
+                    placeholder="Enter your email address (viet@vietnoms.com)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                     disabled={isEmailSending}
                   />

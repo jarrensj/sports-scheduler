@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { getTeamLogo } from '@/lib/utils'
 
 interface UserPreferences {
   sportsInterests: string[]
@@ -205,7 +206,7 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
                     const value = e.target.value === '' ? 1 : Math.max(1, Math.min(10, parseInt(e.target.value) || 1))
                     handlePreferenceChange({ numberOfTvs: value })
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                 </div>
@@ -226,7 +227,7 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
                 value={preferences.tvSetupDescription}
                 onChange={(e) => handlePreferenceChange({ tvSetupDescription: e.target.value })}
                 placeholder="e.g., 65' main TV in living room, 32' in kitchen, projector in basement. Main TV has surround sound..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none text-gray-900"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Help AI optimize your viewing experience by describing your TV locations, sizes, audio setup, etc.
@@ -247,6 +248,11 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         checked={preferences.favoriteNbaTeams.includes(team.value)}
                         onChange={() => handleNbaTeamChange(team.value)}
+                      />
+                      <img 
+                        src={getTeamLogo(team.value)} 
+                        alt={`${team.value} logo`}
+                        className="ml-2 w-5 h-5 object-contain"
                       />
                       <span className="ml-2 text-sm text-gray-700 flex-1">{team.label}</span>
                       <span className="ml-1 text-xs text-gray-400 font-mono">{team.value}</span>
@@ -271,7 +277,7 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
                 placeholder="12345"
                 value={preferences.zipCode}
                 onChange={(e) => handlePreferenceChange({ zipCode: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Used for local broadcast information and timezone

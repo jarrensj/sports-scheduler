@@ -1,0 +1,28 @@
+<svg width="250" height="60" viewBox="0 0 250 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Globe with W and arrow -->
+  <g>
+    <!-- Globe circle -->
+    <circle cx="30" cy="30" r="25" fill="#1e40af" stroke="#1e40af" stroke-width="2"/>
+    
+    <!-- Globe meridians -->
+    <path d="M 5 30 Q 30 15 55 30 Q 30 45 5 30" stroke="white" stroke-width="1.5" fill="none" opacity="0.7"/>
+    <path d="M 5 30 Q 30 20 55 30 Q 30 40 5 30" stroke="white" stroke-width="1.5" fill="none" opacity="0.5"/>
+    
+    <!-- Globe parallels -->
+    <ellipse cx="30" cy="20" rx="20" ry="8" stroke="white" stroke-width="1.5" fill="none" opacity="0.7"/>
+    <ellipse cx="30" cy="40" rx="20" ry="8" stroke="white" stroke-width="1.5" fill="none" opacity="0.5"/>
+    
+    <!-- Letter W -->
+    <path d="M 15 20 L 18 35 L 22 25 L 26 35 L 29 20 L 32 20 L 28 40 L 25 30 L 21 40 L 18 30 L 14 40 L 11 20 Z" fill="white"/>
+    
+    <!-- Upward arrow -->
+    <path d="M 45 25 L 50 20 L 55 25 L 52 25 L 52 35 L 48 35 L 48 25 Z" fill="#1e40af"/>
+  </g>
+  
+  <!-- Text - Weeklysports.tv on one line -->
+  <g>
+    <text x="70" y="35" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1e40af">
+      <tspan fill="#1e40af">Weekly</tspan><tspan fill="#6b7280">sports.tv</tspan>
+    </text>
+  </g>
+</svg>

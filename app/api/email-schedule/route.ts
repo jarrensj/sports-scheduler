@@ -363,6 +363,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if recipient email is the verified one
+    const verifiedEmail = 'viet@vietnoms.com'
+    const isVerifiedEmail = recipientEmail.toLowerCase() === verifiedEmail.toLowerCase()
+    
+    if (!isVerifiedEmail) {
+      return NextResponse.json(
+        { 
+          error: 'Email restriction: You can only send emails to your verified address (viet@vietnoms.com). To send emails to other recipients, please verify a domain at resend.com/domains.',
+          verifiedEmail: verifiedEmail,
+          attemptedEmail: recipientEmail
+        },
+        { status: 403 }
+      )
+    }
+
     const weekRange = formatWeekRange(weekData.weekStart, weekData.weekEnd)
     const emailHTML = isOptimizedCalendar ? generateOptimizedEmailHTML(weekData) : generateEmailHTML(weekData)
     const subject = isOptimizedCalendar ? `AI-Optimized Viewing Plan - ${weekRange}` : `Sports Schedule - ${weekRange}`
