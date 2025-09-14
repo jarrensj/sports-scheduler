@@ -903,27 +903,27 @@ export default function Schedule() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Calendar View
+                📅 Calendar View
               </button>
               <button
                 onClick={() => setViewMode('tv-day')}
-                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                className={`px-3 py-2 rounded-md font-medium transition-colors text-sm ${
                   viewMode === 'tv-day'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-gray-50 text-gray-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                📺 TV Day View
+                📺 TV View
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                className={`px-3 py-2 rounded-md font-medium transition-colors text-sm ${
                   viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-gray-50 text-gray-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                List View
+                📋 List View
               </button>
             </div>
           </div>
