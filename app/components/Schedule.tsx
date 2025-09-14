@@ -113,6 +113,7 @@ export default function Schedule() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [emailAddress, setEmailAddress] = useState('')
   const [isEmailSending, setIsEmailSending] = useState(false)
+  const [isSubscriptionEmailSending, setIsSubscriptionEmailSending] = useState(false)
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -714,6 +715,76 @@ export default function Schedule() {
     }
   }
 
+  // Send subscription email for optimized calendar
+  const sendSubscriptionEmail = async () => {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      setEmailStatus({ type: 'error', message: 'Please enter a valid email address' })
+      return
+    }
+
+    if (!generatedCalendar) {
+      setEmailStatus({ type: 'error', message: 'No optimized calendar available' })
+      return
+    }
+
+    if (!weeks[currentWeek]) {
+      setEmailStatus({ type: 'error', message: 'No week data available' })
+      return
+    }
+
+    setIsSubscriptionEmailSending(true)
+    setEmailStatus(null)
+
+    try {
+      const weekData = {
+        weekStart: weeks[currentWeek].weekStart.toISOString(),
+        weekEnd: weeks[currentWeek].weekEnd.toISOString(),
+        games: generatedCalendar.optimizedGames,
+        tvSchedule: generatedCalendar.tvSchedule,
+        recommendations: generatedCalendar.recommendations,
+        weekSummary: generatedCalendar.weekSummary,
+        isOptimized: true
+      }
+
+      const response = await fetch('/api/email-schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          weekData,
+          recipientEmail: emailAddress,
+          isOptimizedCalendar: true
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send subscription email')
+      }
+
+      setEmailStatus({ 
+        type: 'success', 
+        message: `Automated viewing plan subscription email sent to ${emailAddress}! 🚀` 
+      })
+      
+      // Close email input after 3 seconds
+      setTimeout(() => {
+        setEmailStatus(null)
+        setEmailAddress('')
+      }, 3000)
+
+    } catch (error) {
+      setEmailStatus({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to send subscription email' 
+      })
+    } finally {
+      setIsSubscriptionEmailSending(false)
+    }
+  }
+
   // Generate calendar handlers
   const openGenerateModal = () => {
     setIsGenerateModalOpen(true)
@@ -1264,11 +1335,11 @@ export default function Schedule() {
                             )}
                           </button>
                           <button
-                            onClick={sendOptimizedCalendarEmail}
-                            disabled={isEmailSending || !emailAddress}
+                            onClick={sendSubscriptionEmail}
+                            disabled={isSubscriptionEmailSending || !emailAddress}
                             className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all font-medium flex items-center space-x-2 text-base shadow-md hover:shadow-lg transform hover:scale-105"
                           >
-                            {isEmailSending ? (
+                            {isSubscriptionEmailSending ? (
                               <>
                                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                                 <span>Sending...</span>
