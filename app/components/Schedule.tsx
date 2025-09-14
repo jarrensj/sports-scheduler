@@ -102,8 +102,9 @@ export default function Schedule() {
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar')
+  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'tv-day'>('calendar')
   const [currentWeek, setCurrentWeek] = useState(0)
+  const [currentDay, setCurrentDay] = useState(0) // For TV day view
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(5) // Show 5 game dates per page
   const [selectedGame, setSelectedGame] = useState<Game | null>(null)
@@ -121,6 +122,7 @@ export default function Schedule() {
     recommendations: string[]
     weekSummary: string
   } | null>(null)
+  const [selectedTvTab, setSelectedTvTab] = useState(1)
   const [userPreferences, setUserPreferences] = useState<{
     sportsInterests: string[]
     numberOfTvs: number
@@ -244,6 +246,42 @@ export default function Schedule() {
   const weeks = getWeeksFromSchedule()
   const totalWeeks = weeks.length
 
+  // Get all game dates for TV day view
+  const getAllGameDates = () => {
+    if (!scheduleData) return []
+    
+    const allDates: Array<{
+      date: Date
+      games: Game[]
+      dateString: string
+    }> = []
+    
+    scheduleData.leagueSchedule.gameDates.forEach(gameDate => {
+      // Convert from "MM/DD/YYYY HH:MM:SS" to proper date
+      const datePart = gameDate.gameDate.split(' ')[0] // Get "MM/DD/YYYY"
+      const [month, day, year] = datePart.split('/')
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+      
+      allDates.push({
+        date,
+        games: gameDate.games,
+        dateString: date.toLocaleDateString('en-US', { 
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      })
+    })
+    
+    // Sort by date
+    allDates.sort((a, b) => a.date.getTime() - b.date.getTime())
+    return allDates
+  }
+
+  const allGameDates = getAllGameDates()
+  const totalDays = allGameDates.length
+
   const goToPrevWeek = () => {
     if (currentWeek > 0) {
       setCurrentWeek(currentWeek - 1)
@@ -254,6 +292,43 @@ export default function Schedule() {
     if (currentWeek < totalWeeks - 1) {
       setCurrentWeek(currentWeek + 1)
     }
+  }
+
+  // TV Day view navigation
+  const goToPrevDay = () => {
+    if (currentDay > 0) {
+      setCurrentDay(currentDay - 1)
+    }
+  }
+
+  const goToNextDay = () => {
+    if (currentDay < totalDays - 1) {
+      setCurrentDay(currentDay + 1)
+    }
+  }
+
+  // Convert priority (1-10) to star rating (1-5)
+  const getStarRating = (priority: number) => {
+    // Convert 1-10 scale to 1-5 stars
+    return Math.max(1, Math.min(5, Math.ceil(priority / 2)))
+  }
+
+  // Star Rating Component
+  const StarRating = ({ rating, className = "" }: { rating: number, className?: string }) => {
+    const stars = []
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <svg
+          key={i}
+          className={`w-5 h-5 ${i <= rating ? 'text-yellow-400 fill-current' : 'text-gray-300'} ${className}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      )
+    }
+    return <div className="flex items-center space-x-1">{stars}</div>
   }
 
   const formatWeekRange = (weekStart: Date, weekEnd: Date) => {
@@ -688,6 +763,16 @@ export default function Schedule() {
                 Calendar View
               </button>
               <button
+                onClick={() => setViewMode('tv-day')}
+                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                  viewMode === 'tv-day'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📺 TV Day View
+              </button>
+              <button
                 onClick={() => setViewMode('list')}
                 className={`px-4 py-2 rounded-md font-medium transition-colors ${
                   viewMode === 'list'
@@ -829,133 +914,324 @@ export default function Schedule() {
                   </div>
                 </div>
 
-                {/* Generated Calendar Section */}
+                {/* Optimized Viewing Plan - Text Display */}
                 {generatedCalendar && (
                   <div className="mt-8">
-                    <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-t-lg">
-                      <h3 className="text-xl font-semibold flex items-center">
-                        <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 rounded-t-lg">
+                      <h3 className="text-2xl font-bold flex items-center mb-2">
+                        <svg className="w-7 h-7 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
-                        AI-Optimized Calendar
+                        Optimized Viewing Plan
                       </h3>
-                      <p className="text-purple-100 text-sm mt-1">{generatedCalendar.weekSummary}</p>
+                      <p className="text-purple-100">{generatedCalendar.weekSummary}</p>
                     </div>
 
-                    {/* Optimized Calendar Grid */}
-                    <div className="bg-white rounded-b-lg shadow-sm overflow-hidden">
-                      {/* Day Headers */}
-                      <div className="grid grid-cols-7 bg-purple-50 border-b">
-                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
-                          <div key={day} className="p-4 text-center font-semibold text-purple-700 border-r last:border-r-0">
-                            <div className="hidden sm:block">{day}</div>
-                            <div className="sm:hidden">{day.slice(0, 3)}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Calendar Days with Optimized Colors */}
-                      <div className="grid grid-cols-7">
-                        {weeks[currentWeek].days.map((day, dayIndex) => (
-                          <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
-                            {/* Date Header */}
-                            <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
-                              <span className="text-sm font-medium text-gray-900">
-                                {day.date.getDate()}
-                              </span>
-                              {day.games.length > 0 && (
-                                <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                                  {day.games.length}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Time Grid Lines */}
-                            <div className="absolute inset-0 top-10 pointer-events-none">
-                              {timeGridLines.map((line, lineIndex) => (
-                                <div
-                                  key={lineIndex}
-                                  className="absolute w-full border-t border-gray-100"
-                                  style={{ top: `${line.position}%` }}
-                                >
-                                  <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
-                                    {line.label}
+                    <div className="bg-white rounded-b-lg shadow-sm">
+                      {/* TV Tabs */}
+                      <div className="flex border-b border-gray-200 overflow-x-auto">
+                        {Object.entries(generatedCalendar.tvSchedule)
+                          .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                          .map(([tvNumber, games]) => {
+                            const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>
+                            const isActive = parseInt(tvNumber) === selectedTvTab
+                            return (
+                              <button
+                                key={tvNumber}
+                                onClick={() => setSelectedTvTab(parseInt(tvNumber))}
+                                className={`flex-shrink-0 px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                                  isActive
+                                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-lg">📺</span>
+                                  <span>TV {tvNumber}</span>
+                                  <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs">
+                                    {gamesList.length}
                                   </span>
                                 </div>
-                              ))}
-                            </div>
-
-                            {/* Games positioned by time with optimization */}
-                            <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
-                              {day.games.map((game) => {
-                                const position = getGamePosition(game, day.games)
-                                // Find ALL TVs that show this game
-                                const allTvsForGame = generatedCalendar.optimizedGames
-                                  ?.filter(og => og.gameId === game.gameId)
-                                  ?.map(og => og.tvAssignment) || []
-                                
-                                const optimizedGame = generatedCalendar.optimizedGames?.find(og => og.gameId === game.gameId)
-                                return (
-                                  <GameCalendarCard
-                                    key={game.gameId}
-                                    game={game}
-                                    position={position}
-                                    onGameClick={openGameModal}
-                                    optimizedColor={optimizedGame?.color || 'rgb(200, 200, 200)'}
-                                    tvAssignments={allTvsForGame}
-                                    priority={optimizedGame?.priority || 5}
-                                  />
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ))}
+                              </button>
+                            )
+                          })
+                        }
                       </div>
-                    </div>
 
-                    {/* TV Legend */}
-                    <div className="mt-4 bg-gray-50 rounded-lg p-4">
-                      <h4 className="font-semibold text-gray-900 mb-3">TV Assignments & Priority Legend</h4>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {/* TV Assignments */}
-                        <div>
-                          <h5 className="font-medium text-gray-700 mb-2">TV Assignments</h5>
-                          <div className="space-y-1">
-                            {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, games]) => {
-                              const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
-                              const gameNames = gamesList.map(g => `${g.awayTeam.teamTricode}@${g.homeTeam.teamTricode}`).join(', ')
-                              return (
-                                <div key={tvNumber} className="flex items-center space-x-2 text-sm">
-                                  <div className="bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold">
-                                    TV{tvNumber}
+                      {/* Selected TV Content */}
+                      <div className="p-6">
+                        {(() => {
+                          const selectedTvGames = generatedCalendar.tvSchedule[selectedTvTab] as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>
+                          
+                          if (!selectedTvGames || selectedTvGames.length === 0) {
+                            return (
+                              <div className="text-center py-12">
+                                <div className="text-4xl mb-4">📺</div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">No Games Assigned</h3>
+                                <p className="text-gray-500">TV {selectedTvTab} has no games scheduled</p>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div>
+                              {/* TV Header */}
+                              <div className="mb-6 pb-4 border-b border-gray-100">
+                                <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+                                  <div className="bg-gray-800 text-white px-4 py-2 rounded-lg mr-4">
+                                    📺 TV {selectedTvTab}
                                   </div>
-                                  <span className="text-gray-600 text-xs">{gameNames || 'No games'}</span>
-                                </div>
-                              )
-                            })}
+                                  <span className="text-gray-600">({selectedTvGames.length} games)</span>
+                                </h3>
+                              </div>
+
+                              {/* Games List */}
+                              <div className="space-y-4">
+                                {selectedTvGames
+                                  .sort((a, b) => {
+                                    // Sort by assigned date, then by time
+                                    const dateA = a.assignedDate || a.gameDateEst
+                                    const dateB = b.assignedDate || b.gameDateEst
+                                    if (dateA !== dateB) return dateA.localeCompare(dateB)
+                                    return a.gameStatusText.localeCompare(b.gameStatusText)
+                                  })
+                                  .map((game, index) => (
+                                    <div 
+                                      key={`${game.gameId}-${index}`}
+                                      className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors cursor-pointer border-l-4 border-blue-500"
+                                      onClick={() => openGameModal(game)}
+                                    >
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center space-x-3 mb-3">
+                                            {/* Day Badge */}
+                                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
+                                              {new Date(game.assignedDate || game.gameDateEst).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
+                                            </span>
+                                            <div className="text-2xl font-bold text-gray-900">
+                                              {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="text-lg text-gray-700 font-medium mb-3">
+                                            {game.assignedTimeSlot || game.gameStatusText}
+                                          </div>
+                                          
+                                          <div className="text-sm text-gray-600 bg-white rounded-lg px-4 py-3 italic">
+                                            &ldquo;{game.reasoning}&rdquo;
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="ml-6 flex flex-col items-end">
+                                          <StarRating rating={getStarRating(game.priority)} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                }
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
+
+                      {/* AI Recommendations */}
+                      <div className="mt-8 bg-blue-50 rounded-lg p-6">
+                        <h4 className="text-lg font-bold text-blue-900 mb-4">AI Recommendations</h4>
+                        <ul className="space-y-2">
+                          {generatedCalendar.recommendations.map((rec: string, index: number) => (
+                            <li key={index} className="flex items-start space-x-3">
+                              <span className="text-blue-600 font-bold">•</span>
+                              <span className="text-blue-800">{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : viewMode === 'tv-day' ? (
+          // TV Day View - Optimized for Television Displays
+          <div>
+            {allGameDates.length > 0 && (
+              <>
+                {/* Day Navigation */}
+                <div className="flex justify-between items-center mb-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                  <button
+                    onClick={goToPrevDay}
+                    disabled={currentDay === 0}
+                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                      currentDay === 0
+                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
+                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                    }`}
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span>Previous Day</span>
+                  </button>
+
+                  <div className="text-center">
+                    <h1 className="text-3xl font-bold mb-2">
+                      📺 {allGameDates[currentDay]?.dateString}
+                    </h1>
+                    <p className="text-blue-100 text-lg font-medium">
+                      Day {currentDay + 1} of {totalDays} • {allGameDates[currentDay]?.games.length} games today
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={goToNextDay}
+                    disabled={currentDay === totalDays - 1}
+                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                      currentDay === totalDays - 1
+                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
+                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                    }`}
+                  >
+                    <span>Next Day</span>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* TV-Optimized Game Cards */}
+                {allGameDates[currentDay]?.games.length === 0 ? (
+                  <div className="text-center py-20">
+                    <div className="text-6xl mb-4">📺</div>
+                    <h2 className="text-3xl font-bold text-gray-600 mb-2">No Games Today</h2>
+                    <p className="text-xl text-gray-500">Check back tomorrow for more games!</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+                    {allGameDates[currentDay]?.games.map((game) => (
+                      <div 
+                        key={game.gameId}
+                        className="bg-white rounded-2xl shadow-2xl overflow-hidden hover:shadow-3xl transition-all duration-300 transform hover:scale-105 cursor-pointer border-4 border-transparent hover:border-blue-500"
+                        onClick={() => openGameModal(game)}
+                      >
+                        {/* Game Header - Large and Bold for TV */}
+                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+                          <div className="text-center">
+                            <div className="text-4xl font-black mb-2">
+                              {formatGameTime(game.gameStatusText)}
+                            </div>
+                            {game.gameSubLabel && (
+                              <div className="bg-orange-500 text-white px-4 py-2 rounded-full text-lg font-bold inline-block">
+                                {game.gameSubLabel}
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        {/* Priority Colors */}
-                        <div>
-                          <h5 className="font-medium text-gray-700 mb-2">Game Priority Colors</h5>
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2 text-sm">
-                              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(0, 165, 255)' }}></div>
-                              <span>High Priority</span>
+                        {/* Teams Section - Extra Large for TV Viewing */}
+                        <div className="p-8">
+                          <div className="flex items-center justify-between mb-6">
+                            {/* Away Team */}
+                            <div className="text-center flex-1">
+                              <div className="text-sm text-gray-500 font-medium mb-2">AWAY</div>
+                              <div className="text-2xl font-black text-gray-900 mb-2">
+                                {game.awayTeam.teamTricode}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.awayTeam.teamCity}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.awayTeam.teamName}
+                              </div>
+                              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg text-lg font-bold mt-2">
+                                {game.awayTeam.wins}-{game.awayTeam.losses}
+                              </div>
                             </div>
-                            <div className="flex items-center space-x-2 text-sm">
-                              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(128, 210, 128)' }}></div>
-                              <span>Medium Priority</span>
+
+                            {/* VS Divider */}
+                            <div className="px-6">
+                              <div className="text-4xl font-black text-gray-400">@</div>
                             </div>
-                            <div className="flex items-center space-x-2 text-sm">
-                              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(255, 255, 0)' }}></div>
-                              <span>Lower Priority</span>
+
+                            {/* Home Team */}
+                            <div className="text-center flex-1">
+                              <div className="text-sm text-gray-500 font-medium mb-2">HOME</div>
+                              <div className="text-2xl font-black text-gray-900 mb-2">
+                                {game.homeTeam.teamTricode}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.homeTeam.teamCity}
+                              </div>
+                              <div className="text-lg text-gray-700 font-medium">
+                                {game.homeTeam.teamName}
+                              </div>
+                              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg text-lg font-bold mt-2">
+                                {game.homeTeam.wins}-{game.homeTeam.losses}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Venue Information - Large Text */}
+                          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div className="flex items-center justify-center space-x-3">
+                              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-gray-900">{game.arenaName}</div>
+                                <div className="text-base text-gray-600">
+                                  {game.arenaCity}{game.arenaState && `, ${game.arenaState}`}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Broadcast Information - Prominent for TV */}
+                          <div className="bg-green-50 rounded-lg p-4">
+                            <div className="flex items-center justify-center space-x-3 mb-3">
+                              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-lg font-bold text-green-800">WATCH ON</span>
+                            </div>
+                            
+                            {getAllBroadcasters(game.broadcasters).length > 0 ? (
+                              <div className="flex flex-wrap gap-2 justify-center">
+                                {getAllBroadcasters(game.broadcasters).slice(0, 4).map((broadcaster, idx) => (
+                                  <span key={idx} className="bg-green-600 text-white px-4 py-2 rounded-full text-base font-bold">
+                                    {broadcaster}
+                                  </span>
+                                ))}
+                                {getAllBroadcasters(game.broadcasters).length > 4 && (
+                                  <span className="bg-green-500 text-white px-4 py-2 rounded-full text-base font-bold">
+                                    +{getAllBroadcasters(game.broadcasters).length - 4} more
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <span className="bg-gray-400 text-white px-4 py-2 rounded-full text-base font-bold">
+                                  TBD
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Game Duration Info */}
+                          <div className="mt-4 text-center">
+                            <div className="bg-blue-50 rounded-lg p-3">
+                              <div className="text-sm text-blue-600 font-medium mb-1">ESTIMATED DURATION</div>
+                              <div className="text-lg font-bold text-blue-800">
+                                {formatGameTime(game.gameStatusText)} - {getEndTime(game.gameStatusText)}
+                              </div>
+                              <div className="text-sm text-blue-600">~3.5 hours including coverage</div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </>
@@ -1564,146 +1840,6 @@ export default function Schedule() {
                         )
                       })}
                     </div>
-
-                    {/* Multiple TV Broadcasts */}
-                    {(() => {
-                      // Find games that appear on multiple TVs
-                      const gameOccurrences = new Map<string, number[]>()
-                      Object.entries(generatedCalendar.tvSchedule).forEach(([tvNumber, games]) => {
-                        const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string }>
-                        gamesList.forEach(game => {
-                          const key = `${game.awayTeam.teamTricode}-${game.homeTeam.teamTricode}-${game.gameStatusText}`
-                          if (!gameOccurrences.has(key)) {
-                            gameOccurrences.set(key, [])
-                          }
-                          gameOccurrences.get(key)!.push(parseInt(tvNumber))
-                        })
-                      })
-
-                      const duplicatedGames = Array.from(gameOccurrences.entries())
-                        .filter(([, tvs]) => tvs.length > 1)
-                        .map(([gameKey, tvs]) => ({ gameKey, tvs: tvs.sort((a, b) => a - b) }))
-
-                      if (duplicatedGames.length === 0) return null
-
-                      return (
-                        <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                          <h4 className="font-semibold text-blue-900 mb-3">TVs Also Showing Same Broadcasts</h4>
-                          <div className="space-y-2">
-                            {duplicatedGames.map(({ gameKey, tvs }) => {
-                              const [awayTeam, homeTeam] = gameKey.split('-')
-                              return (
-                                <div key={gameKey} className="flex items-center justify-between text-sm">
-                                  <span className="text-blue-800 font-medium">
-                                    {awayTeam} @ {homeTeam}
-                                  </span>
-                                  <div className="flex items-center space-x-1">
-                                    <span className="text-blue-600">TVs:</span>
-                                    {tvs.map((tv, index) => (
-                                      <span key={tv} className="bg-blue-200 text-blue-800 px-2 py-1 rounded text-xs font-bold">
-                                        {tv}{index < tvs.length - 1 ? ',' : ''}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {/* Daily TV Programming Guide */}
-                    <div className="bg-green-50 rounded-lg p-4 mb-6">
-                      <h4 className="font-semibold text-green-900 mb-3">📺 Daily TV Programming Guide</h4>
-                      <div className="space-y-4">
-                        {weeks[currentWeek].days.map((day, dayIndex) => {
-                          const dayName = day.date.toLocaleDateString('en-US', { weekday: 'long' })
-                          const dayGames = day.games
-                          
-                          if (dayGames.length === 0) {
-                            return (
-                              <div key={dayIndex} className="bg-white rounded-lg p-3 border border-green-200">
-                                <h5 className="font-semibold text-green-800 mb-2">{dayName} - {day.date.toLocaleDateString()}</h5>
-                                <p className="text-green-600 text-sm">No games scheduled</p>
-                              </div>
-                            )
-                          }
-
-                          // Sort games by time for this day
-                          const sortedDayGames = [...dayGames].sort((a, b) => a.gameStatusText.localeCompare(b.gameStatusText))
-                          
-                          // Create TV schedule for this day
-                          const tvScheduleForDay: { [tvNumber: number]: Array<{ game: Game; timeSlot: string }> } = {}
-                          
-                          // Initialize all TVs
-                          for (let i = 1; i <= (userPreferences?.numberOfTvs || 1); i++) {
-                            tvScheduleForDay[i] = []
-                          }
-                          
-                          // Distribute games throughout the day
-                          sortedDayGames.forEach((game, gameIndex) => {
-                            const gameStartTime = game.gameStatusText
-                            
-                            // Calculate which TVs should show this game
-                            const numTvs = userPreferences?.numberOfTvs || 1
-                            
-                            if (sortedDayGames.length === 1) {
-                              // One game - all TVs show it
-                              for (let tv = 1; tv <= numTvs; tv++) {
-                                tvScheduleForDay[tv].push({
-                                  game,
-                                  timeSlot: `${gameStartTime} - ${getEndTime(gameStartTime)}`
-                                })
-                              }
-                            } else if (sortedDayGames.length === 2) {
-                              // Two games - split TVs
-                              const tvsPerGame = Math.ceil(numTvs / 2)
-                              const startTv = gameIndex === 0 ? 1 : tvsPerGame + 1
-                              const endTv = gameIndex === 0 ? tvsPerGame : numTvs
-                              
-                              for (let tv = startTv; tv <= endTv; tv++) {
-                                tvScheduleForDay[tv].push({
-                                  game,
-                                  timeSlot: `${gameStartTime} - ${getEndTime(gameStartTime)}`
-                                })
-                              }
-                            } else {
-                              // Multiple games - round robin
-                              const tvNumber = (gameIndex % numTvs) + 1
-                              tvScheduleForDay[tvNumber].push({
-                                game,
-                                timeSlot: `${gameStartTime} - ${getEndTime(gameStartTime)}`
-                              })
-                            }
-                          })
-
-                          return (
-                            <div key={dayIndex} className="bg-white rounded-lg p-3 border border-green-200">
-                              <h5 className="font-semibold text-green-800 mb-3">{dayName} - {day.date.toLocaleDateString()}</h5>
-                              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
-                                {Object.entries(tvScheduleForDay).map(([tvNum, schedule]) => (
-                                  <div key={tvNum} className="bg-gray-50 rounded p-2">
-                                    <div className="font-bold text-gray-800 mb-1">TV {tvNum}</div>
-                                    {schedule.length > 0 ? (
-                                      schedule.map((item, idx) => (
-                                        <div key={idx} className="text-gray-600 mb-1">
-                                          <div className="font-medium">{item.timeSlot}</div>
-                                          <div>{item.game.awayTeam.teamTricode} @ {item.game.homeTeam.teamTricode}</div>
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="text-gray-400">No games</div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
                     {/* Recommendations */}
                     <div className="bg-blue-50 rounded-lg p-4 mb-6">
                       <h4 className="font-semibold text-blue-900 mb-2">AI Recommendations</h4>
