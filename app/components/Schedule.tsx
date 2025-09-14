@@ -2084,24 +2084,6 @@ export default function Schedule() {
                       </ul>
                     </div>
 
-                    {/* Color Legend */}
-                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                      <h4 className="font-semibold text-gray-900 mb-2">Priority Color Scale</h4>
-                      <div className="flex items-center space-x-4 text-sm">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(0, 165, 255)' }}></div>
-                          <span>High Priority</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(128, 210, 128)' }}></div>
-                          <span>Medium Priority</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgb(255, 255, 0)' }}></div>
-                          <span>Low Priority</span>
-                        </div>
-                      </div>
-                    </div>
 
                     {/* Email Section */}
                     <div className="bg-green-50 rounded-lg p-4 mb-6">
