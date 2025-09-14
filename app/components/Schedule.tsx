@@ -706,7 +706,16 @@ export default function Schedule() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to send email')
+        if (result.verifiedEmail && result.attemptedEmail) {
+          // Handle email restriction error
+          setEmailStatus({ 
+            type: 'error', 
+            message: `Email restriction: You can only send emails to your verified address (${result.verifiedEmail}). To send emails to other recipients, please verify a domain at resend.com/domains.` 
+          })
+        } else {
+          throw new Error(result.error || 'Failed to send email')
+        }
+        return
       }
 
       setEmailStatus({ 
@@ -786,7 +795,16 @@ export default function Schedule() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to send email')
+        if (result.verifiedEmail && result.attemptedEmail) {
+          // Handle email restriction error
+          setEmailStatus({ 
+            type: 'error', 
+            message: `Email restriction: You can only send emails to your verified address (${result.verifiedEmail}). To send emails to other recipients, please verify a domain at resend.com/domains.` 
+          })
+        } else {
+          throw new Error(result.error || 'Failed to send email')
+        }
+        return
       }
 
       setEmailStatus({ 
@@ -1209,6 +1227,15 @@ export default function Schedule() {
                               const filteredGames = day.games.filter(shouldShowGame)
                               return filteredGames.map((game) => {
                                 const position = getGamePosition(game, filteredGames, allWeekGames)
+                                
+                                // Get TV assignments for this game from the optimized calendar
+                                const tvAssignments = generatedCalendar ? 
+                                  Object.entries(generatedCalendar.tvSchedule)
+                                    .filter(([_, games]) => games.some(g => g.gameId === game.gameId))
+                                    .map(([tvNumber, _]) => parseInt(tvNumber))
+                                    .sort((a, b) => a - b)
+                                  : undefined
+                                
                                 return (
                                   <GameCalendarCard
                                     key={game.gameId}
@@ -1216,6 +1243,7 @@ export default function Schedule() {
                                     position={position}
                                     onGameClick={openGameModal}
                                     favoriteTeams={userPreferences?.favoriteNbaTeams || []}
+                                    tvAssignments={tvAssignments}
                                   />
                                 )
                               })
@@ -1347,6 +1375,10 @@ export default function Schedule() {
                                             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
                                               {new Date(game.assignedDate || game.gameDateEst).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
                                             </span>
+                                            {/* TV Assignment Badge */}
+                                            <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
+                                              TV {game.tvAssignment}
+                                            </span>
                                             <div className="text-2xl font-bold text-gray-900">
                                               {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
                                             </div>
@@ -1398,7 +1430,7 @@ export default function Schedule() {
                         <div className="flex flex-col sm:flex-row gap-3">
                           <input
                             type="email"
-                            placeholder="Enter your email address"
+                            placeholder="Enter your email address (viet@vietnoms.com)"
                             value={emailAddress}
                             onChange={(e) => setEmailAddress(e.target.value)}
                             className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none text-base"
@@ -2273,8 +2305,13 @@ export default function Schedule() {
                               <div key={game.gameId} className="bg-white rounded-lg p-3 border-l-4" style={{ borderLeftColor: game.color }}>
                                 <div className="flex justify-between items-center">
                                   <div>
-                                    <div className="font-medium text-gray-900">
-                                      {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                    <div className="flex items-center space-x-2 mb-1">
+                                      <div className="font-medium text-gray-900">
+                                        {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                      </div>
+                                      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">
+                                        TV {game.tvAssignment}
+                                      </span>
                                     </div>
                                     <div className="text-sm text-gray-600">
                                       {convertToPacificTime(game.gameStatusText)}
@@ -2321,7 +2358,7 @@ export default function Schedule() {
                       <div className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="email"
-                          placeholder="Enter your email address"
+                          placeholder="Enter your email address (viet@vietnoms.com)"
                           value={emailAddress}
                           onChange={(e) => setEmailAddress(e.target.value)}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -2426,7 +2463,7 @@ export default function Schedule() {
                     type="email"
                     value={emailAddress}
                     onChange={(e) => setEmailAddress(e.target.value)}
-                    placeholder="Enter your email address"
+                    placeholder="Enter your email address (viet@vietnoms.com)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
                     disabled={isEmailSending}
                   />
