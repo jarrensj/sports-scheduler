@@ -841,7 +841,7 @@ export default function Schedule() {
     return (
       <div className="min-h-screen p-8 flex flex-col items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        <p className="mt-4 text-gray-600">Loading NBA Schedule...</p>
+        <p className="mt-4 text-gray-600">Loading Automated TV Plan Scheduler...</p>
       </div>
     )
   }
@@ -884,7 +884,7 @@ export default function Schedule() {
           </div>
           
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            NBA Schedule {scheduleData.leagueSchedule.seasonYear}
+            Automated TV Plan Scheduler
           </h1>
           <p className="text-gray-600 mb-4">
             Last updated: {new Date(scheduleData.meta.time).toLocaleString()}
