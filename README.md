@@ -1,6 +1,6 @@
 # sports scheduler
 
-This project makes it easy for someone to get an automated email (daily and weekly) with a generated schedule of sporting events (and what broadcasts to tune into) to make sure their TVs are always showing an available sports with prioritization to their preferences with the help of ai agent deciding priorizatiom and negotation between what games to show on the TVs and what TVs to show them on.  
+This project makes it easy for someone to get an automated email (daily and weekly) with a generated schedule of sporting events (and what broadcasts to tune into) to make sure their TVs are always showing an available sports with prioritization to their preferences with the help of ai agent deciding priorization and negotation between what games to show on the TVs and what TVs to show them on.  
 
 ## Features
 
