@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { GameCalendarCard } from './GameCalendarCard'
-import UserPreferences from './UserPreferences'
 
 interface Team {
   teamId: number
@@ -99,6 +99,7 @@ interface ScheduleData {
 }
 
 export default function Schedule() {
+  const router = useRouter()
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -148,6 +149,66 @@ export default function Schedule() {
     }
 
     fetchSchedule()
+  }, [])
+
+  // Load user preferences from localStorage on component mount
+  useEffect(() => {
+    const loadPreferences = () => {
+      if (typeof window === 'undefined') return
+      
+      try {
+        const stored = localStorage.getItem('sports-scheduler-user-preferences')
+        if (stored) {
+          const preferences = JSON.parse(stored)
+          setUserPreferences(preferences)
+        }
+      } catch (error) {
+        console.error('Failed to load preferences from localStorage:', error)
+      }
+    }
+
+    loadPreferences()
+
+    // Listen for storage changes (when preferences are updated in settings page)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sports-scheduler-user-preferences' && e.newValue) {
+        try {
+          const preferences = JSON.parse(e.newValue)
+          setUserPreferences(preferences)
+        } catch (error) {
+          console.error('Failed to parse preferences from storage event:', error)
+        }
+      }
+    }
+
+    // Listen for window focus to reload preferences when returning from settings
+    const handleWindowFocus = () => {
+      loadPreferences()
+    }
+
+    // Listen for visibility change (when user returns to this tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadPreferences()
+      }
+    }
+
+    // Listen for custom preference update events
+    const handlePreferenceUpdate = () => {
+      loadPreferences()
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('preferencesUpdated', handlePreferenceUpdate)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('preferencesUpdated', handlePreferenceUpdate)
+    }
   }, [])
 
   const formatGameTime = (gameStatusText: string) => {
@@ -737,7 +798,21 @@ export default function Schedule() {
   return (
     <div className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
-        <header className="text-center mb-8">
+        <header className="relative text-center mb-8">
+          {/* Settings Icon */}
+          <div className="absolute top-0 right-0">
+            <button
+              onClick={() => router.push('/settings')}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Settings"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+          
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             NBA Schedule {scheduleData.leagueSchedule.seasonYear}
           </h1>
@@ -746,8 +821,6 @@ export default function Schedule() {
           </p>
         </header>
 
-        {/* User Preferences Section */}
-        <UserPreferences onPreferencesChange={handlePreferencesChange} />
           
         {/* View Mode Toggle */}
         <div className="flex justify-center mb-6">

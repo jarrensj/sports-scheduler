@@ -169,7 +169,7 @@ export default function UserPreferences({ onPreferencesChange }: UserPreferences
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Sports Interests
                   <span className="text-gray-400 text-xs ml-2">(Coming Soon)</span>
-              </label>
+              </label>trubte ace T
               <div className="space-y-2 opacity-50 pointer-events-none">
                 {['Basketball', 'Football', 'Baseball', 'Hockey', 'Soccer', 'Tennis'].map((sport) => (
                   <label key={sport} className="flex items-center">
