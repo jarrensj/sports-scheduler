@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { GameCalendarCard } from './GameCalendarCard'
+import JSConfetti from 'js-confetti'
 
 interface Team {
   teamId: number
@@ -773,6 +774,14 @@ export default function Schedule() {
       setGenerateStatus({ 
         type: 'success', 
         message: 'Optimized calendar generated successfully!' 
+      })
+
+      // Trigger confetti celebration with rockets and sparkles
+      const jsConfetti = new JSConfetti()
+      jsConfetti.addConfetti({
+        emojis: ['🚀', '✨', '🎉', '🏀', '⚡'],
+        emojiSize: 50,
+        confettiNumber: 40,
       })
 
     } catch (error) {
