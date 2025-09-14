@@ -122,6 +122,65 @@ export default function Schedule() {
     
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${displayPeriod} PT`
   }
+
+  // Helper function to determine if a game should be shown based on filters
+  const shouldShowGame = (game: Game) => {
+    if (!userPreferences) return true
+
+    const isFavoriteGame = userPreferences.favoriteNbaTeams.includes(game.homeTeam.teamTricode) || 
+                          userPreferences.favoriteNbaTeams.includes(game.awayTeam.teamTricode)
+    
+    const getAllBroadcasters = (broadcasters: Broadcasters) => {
+      const allBroadcasters = [
+        ...broadcasters.nationalBroadcasters,
+        ...broadcasters.homeTvBroadcasters,
+        ...broadcasters.homeRadioBroadcasters,
+        ...broadcasters.awayTvBroadcasters,
+        ...broadcasters.awayRadioBroadcasters
+      ]
+      
+      return allBroadcasters
+        .filter(broadcaster => broadcaster.broadcasterDisplay !== 'TBD' && broadcaster.broadcasterDisplay)
+        .map(broadcaster => broadcaster.broadcasterDisplay)
+    }
+
+    const hasBroadcastInfo = getAllBroadcasters(game.broadcasters).length > 0
+    const hasAwayTvBroadcast = game.broadcasters.awayTvBroadcasters.some(
+      broadcaster => broadcaster.broadcasterDisplay !== 'TBD' && broadcaster.broadcasterDisplay
+    )
+
+    // Check filters based on game type
+    if (isFavoriteGame && !gameFilters.showFavorite) return false
+    if (hasAwayTvBroadcast && !gameFilters.showAwayTv) return false
+    if (!hasBroadcastInfo && !gameFilters.showTbd) return false
+    if (hasBroadcastInfo && !hasAwayTvBroadcast && !isFavoriteGame && !gameFilters.showRegular) return false
+
+    return true
+  }
+
+  // Helper function to calculate dynamic time range for a week
+  const getWeekTimeRange = (weekGames: Game[]) => {
+    const validGames = weekGames.filter(g => parseGameTime(g.gameStatusText) !== null)
+    
+    if (validGames.length === 0) {
+      // Default range if no valid games
+      return { startTime: 6 * 60, endTime: 26 * 60 } // 6 AM to 2 AM next day
+    }
+
+    const gameTimes = validGames.map(g => {
+      const time = parseGameTime(g.gameStatusText)!
+      return time < 6 * 60 ? time + 24 * 60 : time // Adjust for times after midnight
+    })
+
+    const earliestGame = Math.min(...gameTimes)
+    const latestGame = Math.max(...gameTimes)
+
+    // Add 1 hour buffer before earliest and after latest
+    const startTime = Math.max(0, earliestGame - 60) // 1 hour before earliest
+    const endTime = Math.min(24 * 60, latestGame + 60) // 1 hour after latest
+
+    return { startTime, endTime }
+  }
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -153,6 +212,12 @@ export default function Schedule() {
     favoriteNbaTeams: string[]
     zipCode: string
   } | null>(null)
+  const [gameFilters, setGameFilters] = useState({
+    showRegular: true,      // Light blue - Game On Air
+    showFavorite: true,     // Dark blue - Favorite Team
+    showTbd: true,          // Yellow - Network TBD
+    showAwayTv: true        // Red - Not Airing Locally
+  })
 
   useEffect(() => {
     const fetchSchedule = async () => {
@@ -478,13 +543,14 @@ export default function Schedule() {
     return hours * 60 + minutes // Return minutes from midnight in PT
   }
 
-  const getGamePosition = (game: Game, dayGames: Game[]) => {
+  const getGamePosition = (game: Game, dayGames: Game[], weekGames?: Game[]) => {
     const gameTime = parseGameTime(game.gameStatusText)
     if (gameTime === null) return { top: 0, left: 0, width: 100 }
     
-    // Define time range (6 AM to 2 AM next day = 20 hours)
-    const startTime = 6 * 60 // 6 AM in minutes
-    const endTime = 26 * 60 // 2 AM next day (26:00) in minutes
+    // Use dynamic time range if weekGames provided, otherwise use default
+    const timeRange = weekGames ? getWeekTimeRange(weekGames) : { startTime: 6 * 60, endTime: 26 * 60 }
+    const startTime = timeRange.startTime
+    const endTime = timeRange.endTime
     const totalRange = endTime - startTime
     
     // Adjust for times after midnight
@@ -555,24 +621,26 @@ export default function Schedule() {
   }
 
   // Generate time grid lines
-  const getTimeGridLines = () => {
+  const getTimeGridLines = (startTime: number, endTime: number) => {
     const lines = []
-    // From 6 AM to 2 AM next day
-    for (let hour = 6; hour <= 26; hour += 2) {
-      const displayHour = hour > 24 ? hour - 24 : hour
-      const period = hour >= 12 && hour < 24 ? 'PM' : 'AM'
-      const displayHour12 = displayHour === 0 ? 12 : displayHour > 12 ? displayHour - 12 : displayHour
+    const totalRange = endTime - startTime
+    
+    // Generate grid lines every 2 hours within the range
+    for (let time = startTime; time <= endTime; time += 120) { // 120 minutes = 2 hours
+      const displayHour = Math.floor(time / 60)
+      const displayMinute = time % 60
+      const hour24 = displayHour % 24
+      const period = hour24 >= 12 ? 'PM' : 'AM'
+      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
       
-      const position = ((hour - 6) / 20) * 100
+      const position = ((time - startTime) / totalRange) * 100
       lines.push({
         position,
-        label: `${displayHour12}${period}`
+        label: `${hour12}${period}`
       })
     }
     return lines
   }
-
-  const timeGridLines = getTimeGridLines()
 
   // Modal handlers
   const openGameModal = (game: Game) => {
@@ -1032,6 +1100,60 @@ export default function Schedule() {
                   </button>
                 </div>
 
+                {/* Game Filters */}
+                <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Filter Games</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {/* Light Blue - Game On Air */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showRegular}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showRegular: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200"></div>
+                      <span className="text-xs text-gray-600">Game On Air</span>
+                    </label>
+                    
+                    {/* Dark Blue - Favorite Team */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showFavorite}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showFavorite: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-200 to-blue-300 border-2 border-blue-400"></div>
+                      <span className="text-xs text-gray-600">Favorite Team</span>
+                    </label>
+                    
+                    {/* Yellow - Network TBD */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showTbd}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showTbd: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-200"></div>
+                      <span className="text-xs text-gray-600">Network TBD</span>
+                    </label>
+                    
+                    {/* Red - Not Airing Locally */}
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameFilters.showAwayTv}
+                        onChange={(e) => setGameFilters(prev => ({ ...prev, showAwayTv: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200"></div>
+                      <span className="text-xs text-gray-600">Not Airing Locally</span>
+                    </label>
+                  </div>
+                </div>
+
                 {/* Calendar Grid */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                   {/* Day Headers */}
@@ -1046,52 +1168,62 @@ export default function Schedule() {
 
                   {/* Calendar Days */}
                   <div className="grid grid-cols-7">
-                    {weeks[currentWeek].days.map((day, dayIndex) => (
-                      <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
-                        {/* Date Header */}
-                        <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
-                          <span className="text-sm font-medium text-gray-900">
-                            {day.date.getDate()}
-                          </span>
-                          {day.games.length > 0 && (
-                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                              {day.games.length}
+                    {(() => {
+                      // Calculate dynamic time range for the current week
+                      const allWeekGames = weeks[currentWeek].days.flatMap(day => day.games)
+                      const timeRange = getWeekTimeRange(allWeekGames)
+                      const timeGridLines = getTimeGridLines(timeRange.startTime, timeRange.endTime)
+                      
+                      return weeks[currentWeek].days.map((day, dayIndex) => (
+                        <div key={dayIndex} className="min-h-[600px] border-r border-b last:border-r-0 relative overflow-visible">
+                          {/* Date Header */}
+                          <div className="sticky top-0 bg-white z-10 flex justify-between items-center p-2 border-b border-gray-100">
+                            <span className="text-sm font-medium text-gray-900">
+                              {day.date.getDate()}
                             </span>
-                          )}
-                        </div>
-
-                        {/* Time Grid Lines */}
-                        <div className="absolute inset-0 top-10 pointer-events-none">
-                          {timeGridLines.map((line, lineIndex) => (
-                            <div
-                              key={lineIndex}
-                              className="absolute w-full border-t border-gray-100"
-                              style={{ top: `${line.position}%` }}
-                            >
-                              <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
-                                {line.label}
+                            {day.games.length > 0 && (
+                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                {day.games.length}
                               </span>
-                            </div>
-                          ))}
-                        </div>
+                            )}
+                          </div>
 
-                        {/* Games positioned by time */}
-                        <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
-                          {day.games.map((game) => {
-                            const position = getGamePosition(game, day.games)
-                            return (
-                              <GameCalendarCard
-                                key={game.gameId}
-                                game={game}
-                                position={position}
-                                onGameClick={openGameModal}
-                                favoriteTeams={userPreferences?.favoriteNbaTeams || []}
-                              />
-                            )
-                          })}
+                          {/* Time Grid Lines */}
+                          <div className="absolute inset-0 top-10 pointer-events-none">
+                            {timeGridLines.map((line, lineIndex) => (
+                              <div
+                                key={lineIndex}
+                                className="absolute w-full border-t border-gray-100"
+                                style={{ top: `${line.position}%` }}
+                              >
+                                <span className="text-xs text-gray-400 bg-white px-1 -mt-2 absolute left-1">
+                                  {line.label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Games positioned by time */}
+                          <div className="relative pt-2 overflow-visible" style={{ height: 'calc(100% - 40px)' }}>
+                            {(() => {
+                              const filteredGames = day.games.filter(shouldShowGame)
+                              return filteredGames.map((game) => {
+                                const position = getGamePosition(game, filteredGames, allWeekGames)
+                                return (
+                                  <GameCalendarCard
+                                    key={game.gameId}
+                                    game={game}
+                                    position={position}
+                                    onGameClick={openGameModal}
+                                    favoriteTeams={userPreferences?.favoriteNbaTeams || []}
+                                  />
+                                )
+                              })
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    })()}
                   </div>
                 </div>
 
@@ -1318,35 +1450,6 @@ export default function Schedule() {
                   </div>
                 )}
 
-                {/* Color Legend */}
-                <div className="mt-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Color Legend</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {/* Game On Air */}
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200"></div>
-                      <span className="text-xs text-gray-600">Game On Air</span>
-                    </div>
-                    
-                    {/* Favorite Team */}
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-200 to-blue-300 border-2 border-blue-400"></div>
-                      <span className="text-xs text-gray-600">Favorite Team</span>
-                    </div>
-                    
-                    {/* Network TBD */}
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-200"></div>
-                      <span className="text-xs text-gray-600">Network TBD</span>
-                    </div>
-                    
-                    {/* Not Airing Locally */}
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200"></div>
-                      <span className="text-xs text-gray-600">Not Airing Locally</span>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
           </div>
