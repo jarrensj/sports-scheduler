@@ -1,3 +1,5 @@
+import { getTeamLogo } from '@/lib/utils'
+
 interface Team {
   teamId: number
   teamName: string
@@ -82,6 +84,27 @@ interface GameCalendarCardProps {
 }
 
 export function GameCalendarCard({ game, position, onGameClick, optimizedColor, tvAssignments, priority }: GameCalendarCardProps) {
+  // Helper function to convert game time from ET to PT for display
+  const convertToPacificTime = (gameStatusText: string) => {
+    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (!timeMatch) return gameStatusText
+    
+    let hours = parseInt(timeMatch[1])
+    const minutes = parseInt(timeMatch[2])
+    const period = timeMatch[3].toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    // Convert from ET to PT (subtract 3 hours)
+    hours = (hours - 3 + 24) % 24
+    
+    const displayPeriod = hours >= 12 ? 'pm' : 'am'
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+    
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${displayPeriod} PT`
+  }
+
   const getAllBroadcasters = (broadcasters: Broadcasters) => {
     const allBroadcasters = [
       ...broadcasters.nationalBroadcasters,
@@ -142,14 +165,28 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
 
       {/* Game Time */}
       <div className={`font-bold mb-1 text-center text-xs ${optimizedColor ? 'text-gray-800' : 'text-blue-700'}`}>
-        {game.gameStatusText}
+        {convertToPacificTime(game.gameStatusText)}
       </div>
       
       {/* Teams */}
       <div className="flex items-center justify-between mb-1">
-        <span className="font-bold text-gray-800 text-xs">{game.awayTeam.teamTricode}</span>
+        <div className="flex items-center space-x-1">
+          <img 
+            src={getTeamLogo(game.awayTeam.teamTricode)} 
+            alt={`${game.awayTeam.teamTricode} logo`}
+            className="w-4 h-4 object-contain"
+          />
+          <span className="font-bold text-gray-800 text-xs">{game.awayTeam.teamTricode}</span>
+        </div>
         <span className="text-gray-600 font-bold text-xs">@</span>
-        <span className="font-bold text-gray-800 text-xs">{game.homeTeam.teamTricode}</span>
+        <div className="flex items-center space-x-1">
+          <img 
+            src={getTeamLogo(game.homeTeam.teamTricode)} 
+            alt={`${game.homeTeam.teamTricode} logo`}
+            className="w-4 h-4 object-contain"
+          />
+          <span className="font-bold text-gray-800 text-xs">{game.homeTeam.teamTricode}</span>
+        </div>
       </div>
 
       {/* Special Event Label */}
@@ -166,7 +203,7 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
         {getAllBroadcasters(game.broadcasters).length > 0 ? (
           <div className="text-center">
             <div className="flex items-center justify-center space-x-1">
-              <svg className="w-2 h-2 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-2 h-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
               <span className="text-green-800 font-bold text-xs truncate">

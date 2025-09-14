@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { GameCalendarCard } from './GameCalendarCard'
+import { getTeamLogo } from '@/lib/utils'
 
 interface Team {
   teamId: number
@@ -212,7 +213,7 @@ export default function Schedule() {
   }, [])
 
   const formatGameTime = (gameStatusText: string) => {
-    return gameStatusText
+    return convertToPacificTime(gameStatusText)
   }
 
   const formatDate = (dateString: string) => {
@@ -406,7 +407,7 @@ export default function Schedule() {
     }
   }
 
-  // Helper function to calculate game end time (3.5 hours after start)
+  // Helper function to calculate game end time (3.5 hours after start) in Pacific Time
   const getEndTime = (startTime: string) => {
     try {
       // Parse time like "7:00 pm ET"
@@ -420,7 +421,10 @@ export default function Schedule() {
       if (period === 'pm' && hours !== 12) hours += 12
       if (period === 'am' && hours === 12) hours = 0
       
-      // Add 3.5 hours
+      // Convert from ET to PT (subtract 3 hours)
+      hours = (hours - 3 + 24) % 24
+      
+      // Add 3.5 hours for game duration
       const totalMinutes = hours * 60 + minutes + (3.5 * 60)
       const endHours = Math.floor(totalMinutes / 60) % 24
       const endMins = Math.floor(totalMinutes % 60)
@@ -428,10 +432,31 @@ export default function Schedule() {
       const endPeriod = endHours >= 12 ? 'pm' : 'am'
       const displayHours = endHours === 0 ? 12 : endHours > 12 ? endHours - 12 : endHours
       
-      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} ET`
+      return `${displayHours}:${endMins.toString().padStart(2, '0')} ${endPeriod} PT`
     } catch {
       return 'End Time TBD'
     }
+  }
+
+  // Helper function to convert game time from ET to PT for display
+  const convertToPacificTime = (gameStatusText: string) => {
+    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (!timeMatch) return gameStatusText
+    
+    let hours = parseInt(timeMatch[1])
+    const minutes = parseInt(timeMatch[2])
+    const period = timeMatch[3].toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    // Convert from ET to PT (subtract 3 hours)
+    hours = (hours - 3 + 24) % 24
+    
+    const displayPeriod = hours >= 12 ? 'pm' : 'am'
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+    
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${displayPeriod} PT`
   }
 
   // Time-based positioning helpers
@@ -447,7 +472,10 @@ export default function Schedule() {
     if (period === 'pm' && hours !== 12) hours += 12
     if (period === 'am' && hours === 12) hours = 0
     
-    return hours * 60 + minutes // Return minutes from midnight
+    // Convert from ET to PT (subtract 3 hours)
+    hours = (hours - 3 + 24) % 24
+    
+    return hours * 60 + minutes // Return minutes from midnight in PT
   }
 
   const getGamePosition = (game: Game, dayGames: Game[]) => {
@@ -1183,7 +1211,7 @@ export default function Schedule() {
                                           </div>
                                           
                                           <div className="text-lg text-gray-700 font-medium mb-3">
-                                            {game.assignedTimeSlot || game.gameStatusText}
+                                            {game.assignedTimeSlot || convertToPacificTime(game.gameStatusText)}
                                           </div>
                                           
                                           <div className="text-sm text-gray-600 bg-white rounded-lg px-4 py-3 italic">
@@ -1288,27 +1316,27 @@ export default function Schedule() {
             {allGameDates.length > 0 && (
               <>
                 {/* Day Navigation */}
-                <div className="flex justify-between items-center mb-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-lg shadow-sm">
                   <button
                     onClick={goToPrevDay}
                     disabled={currentDay === 0}
-                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                       currentDay === 0
-                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
-                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                     <span>Previous Day</span>
                   </button>
 
                   <div className="text-center">
-                    <h1 className="text-3xl font-bold mb-2">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
                       📺 {allGameDates[currentDay]?.dateString}
                     </h1>
-                    <p className="text-blue-100 text-lg font-medium">
+                    <p className="text-gray-600 text-sm">
                       Day {currentDay + 1} of {totalDays} • {allGameDates[currentDay]?.games.length} games today
                     </p>
                   </div>
@@ -1316,15 +1344,15 @@ export default function Schedule() {
                   <button
                     onClick={goToNextDay}
                     disabled={currentDay === totalDays - 1}
-                    className={`flex items-center space-x-3 px-6 py-3 rounded-lg font-bold text-lg transition-colors ${
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                       currentDay === totalDays - 1
-                        ? 'bg-black bg-opacity-20 text-gray-300 cursor-not-allowed'
-                        : 'bg-white bg-opacity-20 hover:bg-opacity-30 backdrop-blur-sm'
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
                     <span>Next Day</span>
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
                 </div>
@@ -1364,8 +1392,15 @@ export default function Schedule() {
                             {/* Away Team */}
                             <div className="text-center flex-1">
                               <div className="text-sm text-gray-500 font-medium mb-2">AWAY</div>
-                              <div className="text-2xl font-black text-gray-900 mb-2">
-                                {game.awayTeam.teamTricode}
+                              <div className="flex items-center justify-center mb-3">
+                                <img 
+                                  src={getTeamLogo(game.awayTeam.teamTricode)} 
+                                  alt={`${game.awayTeam.teamTricode} logo`}
+                                  className="w-12 h-12 object-contain mr-3"
+                                />
+                                <div className="text-2xl font-black text-gray-900">
+                                  {game.awayTeam.teamTricode}
+                                </div>
                               </div>
                               <div className="text-lg text-gray-700 font-medium">
                                 {game.awayTeam.teamCity}
@@ -1386,8 +1421,15 @@ export default function Schedule() {
                             {/* Home Team */}
                             <div className="text-center flex-1">
                               <div className="text-sm text-gray-500 font-medium mb-2">HOME</div>
-                              <div className="text-2xl font-black text-gray-900 mb-2">
-                                {game.homeTeam.teamTricode}
+                              <div className="flex items-center justify-center mb-3">
+                                <img 
+                                  src={getTeamLogo(game.homeTeam.teamTricode)} 
+                                  alt={`${game.homeTeam.teamTricode} logo`}
+                                  className="w-12 h-12 object-contain mr-3"
+                                />
+                                <div className="text-2xl font-black text-gray-900">
+                                  {game.homeTeam.teamTricode}
+                                </div>
                               </div>
                               <div className="text-lg text-gray-700 font-medium">
                                 {game.homeTeam.teamCity}
@@ -1429,9 +1471,12 @@ export default function Schedule() {
                             {getAllBroadcasters(game.broadcasters).length > 0 ? (
                               <div className="flex flex-wrap gap-2 justify-center">
                                 {getAllBroadcasters(game.broadcasters).slice(0, 4).map((broadcaster, idx) => (
-                                  <span key={idx} className="bg-green-600 text-white px-4 py-2 rounded-full text-base font-bold">
-                                    {broadcaster}
-                                  </span>
+                                  <div key={idx} className="bg-green-600 text-white px-4 py-2 rounded-full text-base font-bold flex items-center space-x-2">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                    <span>{broadcaster}</span>
+                                  </div>
                                 ))}
                                 {getAllBroadcasters(game.broadcasters).length > 4 && (
                                   <span className="bg-green-500 text-white px-4 py-2 rounded-full text-base font-bold">
@@ -1512,6 +1557,11 @@ export default function Schedule() {
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center space-x-3">
                               <span className="text-sm text-gray-500 w-12">Away:</span>
+                              <img 
+                                src={getTeamLogo(game.awayTeam.teamTricode)} 
+                                alt={`${game.awayTeam.teamTricode} logo`}
+                                className="w-6 h-6 object-contain"
+                              />
                               <span className="font-semibold text-gray-900">
                                 {game.awayTeam.teamCity} {game.awayTeam.teamName}
                               </span>
@@ -1523,6 +1573,11 @@ export default function Schedule() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
                               <span className="text-sm text-gray-500 w-12">Home:</span>
+                              <img 
+                                src={getTeamLogo(game.homeTeam.teamTricode)} 
+                                alt={`${game.homeTeam.teamTricode} logo`}
+                                className="w-6 h-6 object-contain"
+                              />
                               <span className="font-semibold text-gray-900">
                                 {game.homeTeam.teamCity} {game.homeTeam.teamName}
                               </span>
@@ -1564,9 +1619,12 @@ export default function Schedule() {
                               {getAllBroadcasters(game.broadcasters).length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                   {getAllBroadcasters(game.broadcasters).map((broadcaster, idx) => (
-                                    <span key={idx} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                                      {broadcaster}
-                                    </span>
+                                    <div key={idx} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs flex items-center space-x-1">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                      </svg>
+                                      <span>{broadcaster}</span>
+                                    </div>
                                   ))}
                                 </div>
                               ) : (
@@ -1832,9 +1890,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">National TV</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.nationalBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1846,9 +1907,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Home TV</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.homeTvBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1860,9 +1924,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Home Radio</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.homeRadioBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-purple-100 text-purple-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-purple-100 text-purple-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1874,9 +1941,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Away TV</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.awayTvBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-orange-100 text-orange-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-orange-100 text-orange-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1888,9 +1958,12 @@ export default function Schedule() {
                           <div className="text-sm font-medium text-gray-700 mb-1">Away Radio</div>
                           <div className="flex flex-wrap gap-2">
                             {selectedGame.broadcasters.awayRadioBroadcasters.map((broadcaster, idx) => (
-                              <span key={idx} className="bg-red-100 text-red-800 px-3 py-1 rounded text-sm font-medium">
-                                {broadcaster.broadcasterDisplay}
-                              </span>
+                              <div key={idx} className="bg-red-100 text-red-800 px-3 py-1 rounded text-sm font-medium flex items-center space-x-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>{broadcaster.broadcasterDisplay}</span>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -2047,7 +2120,7 @@ export default function Schedule() {
                                       {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
                                     </div>
                                     <div className="text-sm text-gray-600">
-                                      {game.gameStatusText}
+                                      {convertToPacificTime(game.gameStatusText)}
                                     </div>
                                   </div>
                                   <div className="text-right">
