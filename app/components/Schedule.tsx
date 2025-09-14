@@ -123,6 +123,7 @@ export default function Schedule() {
     recommendations: string[]
     weekSummary: string
   } | null>(null)
+  const [selectedTvTab, setSelectedTvTab] = useState(1)
   const [userPreferences, setUserPreferences] = useState<{
     sportsInterests: string[]
     numberOfTvs: number
@@ -305,6 +306,30 @@ export default function Schedule() {
     if (currentDay < totalDays - 1) {
       setCurrentDay(currentDay + 1)
     }
+  }
+
+  // Convert priority (1-10) to star rating (1-5)
+  const getStarRating = (priority: number) => {
+    // Convert 1-10 scale to 1-5 stars
+    return Math.max(1, Math.min(5, Math.ceil(priority / 2)))
+  }
+
+  // Star Rating Component
+  const StarRating = ({ rating, className = "" }: { rating: number, className?: string }) => {
+    const stars = []
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <svg
+          key={i}
+          className={`w-5 h-5 ${i <= rating ? 'text-yellow-400 fill-current' : 'text-gray-300'} ${className}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      )
+    }
+    return <div className="flex items-center space-x-1">{stars}</div>
   }
 
   const formatWeekRange = (weekStart: Date, weekEnd: Date) => {
@@ -903,81 +928,112 @@ export default function Schedule() {
                       <p className="text-purple-100">{generatedCalendar.weekSummary}</p>
                     </div>
 
-                    <div className="bg-white rounded-b-lg shadow-sm p-6">
-                      {/* TV Schedule Display */}
-                      <div className="space-y-6">
+                    <div className="bg-white rounded-b-lg shadow-sm">
+                      {/* TV Tabs */}
+                      <div className="flex border-b border-gray-200 overflow-x-auto">
                         {Object.entries(generatedCalendar.tvSchedule)
                           .sort(([a], [b]) => parseInt(a) - parseInt(b))
                           .map(([tvNumber, games]) => {
                             const gamesList = games as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>
+                            const isActive = parseInt(tvNumber) === selectedTvTab
                             return (
-                              <div key={tvNumber} className="border-l-4 border-blue-500 pl-6">
-                                <h4 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                                  <div className="bg-gray-800 text-white px-3 py-2 rounded-lg mr-3">
-                                    📺 TV {tvNumber}
-                                  </div>
-                                  <span className="text-gray-600">({gamesList.length} games)</span>
-                                </h4>
-                                
-                                {gamesList.length === 0 ? (
-                                  <div className="text-gray-500 italic">No games assigned</div>
-                                ) : (
-                                  <div className="space-y-4">
-                                    {gamesList
-                                      .sort((a, b) => {
-                                        // Sort by assigned date, then by time
-                                        const dateA = a.assignedDate || a.gameDateEst
-                                        const dateB = b.assignedDate || b.gameDateEst
-                                        if (dateA !== dateB) return dateA.localeCompare(dateB)
-                                        return a.gameStatusText.localeCompare(b.gameStatusText)
-                                      })
-                                      .map((game, index) => (
-                                        <div 
-                                          key={`${game.gameId}-${index}`}
-                                          className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors cursor-pointer"
-                                          onClick={() => openGameModal(game)}
-                                        >
-                                          <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                              <div className="flex items-center space-x-3 mb-2">
-                                                {/* Day Badge */}
-                                                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
-                                                  {new Date(game.assignedDate || game.gameDateEst).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
-                                                </span>
-                                                <div className="text-xl font-bold text-gray-900">
-                                                  {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
-                                                </div>
-                                              </div>
-                                              
-                                              <div className="text-lg text-gray-700 font-medium mb-2">
-                                                {game.assignedTimeSlot || game.gameStatusText}
-                                              </div>
-                                              
-                                              <div className="text-sm text-gray-600 bg-white rounded px-3 py-2">
-                                                {game.reasoning}
-                                              </div>
-                                            </div>
-                                            
-                                            <div className="ml-4 flex flex-col items-end">
-                                              <div 
-                                                className="w-6 h-6 rounded-full mb-2"
-                                                style={{ backgroundColor: game.color }}
-                                                title={`Priority: ${game.priority}/10`}
-                                              ></div>
-                                              <div className="text-sm font-medium text-gray-600">
-                                                Priority: {game.priority}/10
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))
-                                    }
-                                  </div>
-                                )}
-                              </div>
+                              <button
+                                key={tvNumber}
+                                onClick={() => setSelectedTvTab(parseInt(tvNumber))}
+                                className={`flex-shrink-0 px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                                  isActive
+                                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-lg">📺</span>
+                                  <span>TV {tvNumber}</span>
+                                  <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs">
+                                    {gamesList.length}
+                                  </span>
+                                </div>
+                              </button>
                             )
                           })
                         }
+                      </div>
+
+                      {/* Selected TV Content */}
+                      <div className="p-6">
+                        {(() => {
+                          const selectedTvGames = generatedCalendar.tvSchedule[selectedTvTab] as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>
+                          
+                          if (!selectedTvGames || selectedTvGames.length === 0) {
+                            return (
+                              <div className="text-center py-12">
+                                <div className="text-4xl mb-4">📺</div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">No Games Assigned</h3>
+                                <p className="text-gray-500">TV {selectedTvTab} has no games scheduled</p>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div>
+                              {/* TV Header */}
+                              <div className="mb-6 pb-4 border-b border-gray-100">
+                                <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+                                  <div className="bg-gray-800 text-white px-4 py-2 rounded-lg mr-4">
+                                    📺 TV {selectedTvTab}
+                                  </div>
+                                  <span className="text-gray-600">({selectedTvGames.length} games)</span>
+                                </h3>
+                              </div>
+
+                              {/* Games List */}
+                              <div className="space-y-4">
+                                {selectedTvGames
+                                  .sort((a, b) => {
+                                    // Sort by assigned date, then by time
+                                    const dateA = a.assignedDate || a.gameDateEst
+                                    const dateB = b.assignedDate || b.gameDateEst
+                                    if (dateA !== dateB) return dateA.localeCompare(dateB)
+                                    return a.gameStatusText.localeCompare(b.gameStatusText)
+                                  })
+                                  .map((game, index) => (
+                                    <div 
+                                      key={`${game.gameId}-${index}`}
+                                      className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors cursor-pointer border-l-4 border-blue-500"
+                                      onClick={() => openGameModal(game)}
+                                    >
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center space-x-3 mb-3">
+                                            {/* Day Badge */}
+                                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
+                                              {new Date(game.assignedDate || game.gameDateEst).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
+                                            </span>
+                                            <div className="text-2xl font-bold text-gray-900">
+                                              {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="text-lg text-gray-700 font-medium mb-3">
+                                            {game.assignedTimeSlot || game.gameStatusText}
+                                          </div>
+                                          
+                                          <div className="text-sm text-gray-600 bg-white rounded-lg px-4 py-3 italic">
+                                            "{game.reasoning}"
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="ml-6 flex flex-col items-end">
+                                          <StarRating rating={getStarRating(game.priority)} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                }
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
 
                       {/* AI Recommendations */}
