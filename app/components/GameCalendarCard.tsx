@@ -81,9 +81,10 @@ interface GameCalendarCardProps {
   optimizedColor?: string
   tvAssignments?: number[]  // Changed to array to show multiple TVs
   priority?: number
+  favoriteTeams?: string[]  // Array of favorite team tricodes
 }
 
-export function GameCalendarCard({ game, position, onGameClick, optimizedColor, tvAssignments, priority }: GameCalendarCardProps) {
+export function GameCalendarCard({ game, position, onGameClick, optimizedColor, tvAssignments, priority, favoriteTeams = [] }: GameCalendarCardProps) {
   // Helper function to convert game time from ET to PT for display
   const convertToPacificTime = (gameStatusText: string) => {
     const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
@@ -119,6 +120,16 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
       .map(broadcaster => broadcaster.broadcasterDisplay)
   }
 
+  // Check if this game contains any favorite teams
+  const isFavoriteGame = favoriteTeams.includes(game.homeTeam.teamTricode) || 
+                        favoriteTeams.includes(game.awayTeam.teamTricode)
+
+  // Check broadcast status for color coding
+  const hasBroadcastInfo = getAllBroadcasters(game.broadcasters).length > 0
+  const hasAwayTvBroadcast = game.broadcasters.awayTvBroadcasters.some(
+    broadcaster => broadcaster.broadcasterDisplay !== 'TBD' && broadcaster.broadcasterDisplay
+  )
+
   // Generate dynamic styles based on optimization
   const cardStyle = optimizedColor ? {
     top: `${position.top}%`,
@@ -137,9 +148,25 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
     maxWidth: '100%'
   }
 
-  const cardClassName = optimizedColor ? 
-    "absolute border-2 rounded-lg p-2 text-xs hover:shadow-lg transition-all hover:z-20 cursor-pointer transform hover:scale-105" :
-    "absolute bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+  // Determine card styling based on broadcast status and favorite teams
+  const getCardClassName = () => {
+    if (optimizedColor) {
+      return "absolute border-2 rounded-lg p-2 text-xs hover:shadow-lg transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+    }
+
+    // Priority order: Favorite games > Away TV > Missing broadcast > Regular
+    if (isFavoriteGame) {
+      return "absolute bg-gradient-to-br from-blue-200 to-blue-300 border-2 border-blue-400 rounded-lg p-2 text-xs hover:shadow-lg hover:from-blue-300 hover:to-blue-400 hover:border-blue-500 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+    } else if (hasAwayTvBroadcast) {
+      return "absolute bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-red-100 hover:to-red-200 hover:border-red-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+    } else if (!hasBroadcastInfo) {
+      return "absolute bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-yellow-100 hover:to-yellow-200 hover:border-yellow-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+    } else {
+      return "absolute bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-lg p-2 text-xs hover:shadow-lg hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 transition-all hover:z-20 cursor-pointer transform hover:scale-105"
+    }
+  }
+
+  const cardClassName = getCardClassName()
 
   return (
     <div
@@ -164,7 +191,13 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
       )}
 
       {/* Game Time */}
-      <div className={`font-bold mb-1 text-center text-xs ${optimizedColor ? 'text-gray-800' : 'text-blue-700'}`}>
+      <div className={`font-bold mb-1 text-center text-xs ${
+        optimizedColor ? 'text-gray-800' : 
+        isFavoriteGame ? 'text-blue-800' :
+        hasAwayTvBroadcast ? 'text-red-700' :
+        !hasBroadcastInfo ? 'text-yellow-700' :
+        'text-blue-700'
+      }`}>
         {convertToPacificTime(game.gameStatusText)}
       </div>
       
@@ -176,7 +209,13 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
             alt={`${game.awayTeam.teamTricode} logo`}
             className="w-4 h-4 object-contain"
           />
-          <span className="font-bold text-gray-800 text-xs">{game.awayTeam.teamTricode}</span>
+          <span className={`font-bold text-xs ${
+            optimizedColor ? 'text-gray-800' : 
+            isFavoriteGame ? 'text-blue-900' :
+            hasAwayTvBroadcast ? 'text-red-800' :
+            !hasBroadcastInfo ? 'text-yellow-800' :
+            'text-blue-800'
+          }`}>{game.awayTeam.teamTricode}</span>
         </div>
         <span className="text-gray-600 font-bold text-xs">@</span>
         <div className="flex items-center space-x-1">
@@ -185,7 +224,13 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
             alt={`${game.homeTeam.teamTricode} logo`}
             className="w-4 h-4 object-contain"
           />
-          <span className="font-bold text-gray-800 text-xs">{game.homeTeam.teamTricode}</span>
+          <span className={`font-bold text-xs ${
+            optimizedColor ? 'text-gray-800' : 
+            isFavoriteGame ? 'text-blue-900' :
+            hasAwayTvBroadcast ? 'text-red-800' :
+            !hasBroadcastInfo ? 'text-yellow-800' :
+            'text-blue-800'
+          }`}>{game.homeTeam.teamTricode}</span>
         </div>
       </div>
 
@@ -199,14 +244,26 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
       )}
 
       {/* Broadcast Information */}
-      <div className="border-t border-blue-200 pt-1 mt-1">
+      <div className={`border-t pt-1 mt-1 ${
+        optimizedColor ? 'border-gray-200' :
+        isFavoriteGame ? 'border-blue-300' :
+        hasAwayTvBroadcast ? 'border-red-200' :
+        !hasBroadcastInfo ? 'border-yellow-200' :
+        'border-blue-200'
+      }`}>
         {getAllBroadcasters(game.broadcasters).length > 0 ? (
           <div className="text-center">
             <div className="flex items-center justify-center space-x-1">
               <svg className="w-2 h-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-              <span className="text-green-800 font-bold text-xs truncate">
+              <span className={`font-bold text-xs truncate ${
+                optimizedColor ? 'text-gray-800' :
+                isFavoriteGame ? 'text-blue-800' :
+                hasAwayTvBroadcast ? 'text-red-700' :
+                !hasBroadcastInfo ? 'text-yellow-700' :
+                'text-green-800'
+              }`}>
                 {getAllBroadcasters(game.broadcasters)[0].length > 8 ? 
                   getAllBroadcasters(game.broadcasters)[0].substring(0, 8) + '...' : 
                   getAllBroadcasters(game.broadcasters)[0]
@@ -214,7 +271,13 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
               </span>
             </div>
             {getAllBroadcasters(game.broadcasters).length > 1 && (
-              <div className="text-green-700 text-xs font-medium">
+              <div className={`text-xs font-medium ${
+                optimizedColor ? 'text-gray-600' :
+                isFavoriteGame ? 'text-blue-600' :
+                hasAwayTvBroadcast ? 'text-red-600' :
+                !hasBroadcastInfo ? 'text-yellow-600' :
+                'text-green-700'
+              }`}>
                 +{getAllBroadcasters(game.broadcasters).length - 1}
               </div>
             )}
@@ -225,7 +288,13 @@ export function GameCalendarCard({ game, position, onGameClick, optimizedColor, 
               <svg className="w-2 h-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-              <span className="text-gray-600 font-bold text-xs">TBD</span>
+              <span className={`font-bold text-xs ${
+                optimizedColor ? 'text-gray-600' :
+                isFavoriteGame ? 'text-blue-600' :
+                hasAwayTvBroadcast ? 'text-red-600' :
+                !hasBroadcastInfo ? 'text-yellow-600' :
+                'text-gray-600'
+              }`}>TBD</span>
             </div>
           </div>
         )}

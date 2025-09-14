@@ -101,6 +101,27 @@ interface ScheduleData {
 
 export default function Schedule() {
   const router = useRouter()
+
+  // Helper function to convert game time from ET to PT for display
+  const convertToPacificTime = (gameStatusText: string) => {
+    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+    if (!timeMatch) return gameStatusText
+    
+    let hours = parseInt(timeMatch[1])
+    const minutes = parseInt(timeMatch[2])
+    const period = timeMatch[3].toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    // Convert from ET to PT (subtract 3 hours)
+    hours = (hours - 3 + 24) % 24
+    
+    const displayPeriod = hours >= 12 ? 'pm' : 'am'
+    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+    
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${displayPeriod} PT`
+  }
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -436,27 +457,6 @@ export default function Schedule() {
     } catch {
       return 'End Time TBD'
     }
-  }
-
-  // Helper function to convert game time from ET to PT for display
-  const convertToPacificTime = (gameStatusText: string) => {
-    const timeMatch = gameStatusText.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
-    if (!timeMatch) return gameStatusText
-    
-    let hours = parseInt(timeMatch[1])
-    const minutes = parseInt(timeMatch[2])
-    const period = timeMatch[3].toLowerCase()
-    
-    if (period === 'pm' && hours !== 12) hours += 12
-    if (period === 'am' && hours === 12) hours = 0
-    
-    // Convert from ET to PT (subtract 3 hours)
-    hours = (hours - 3 + 24) % 24
-    
-    const displayPeriod = hours >= 12 ? 'pm' : 'am'
-    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
-    
-    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${displayPeriod} PT`
   }
 
   // Time-based positioning helpers
@@ -911,6 +911,15 @@ export default function Schedule() {
             </button>
           </div>
           
+          {/* Weeklysports.tv Logo */}
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/logo.svg" 
+              alt="Weeklysports.tv" 
+              className="h-16 w-auto"
+            />
+          </div>
+          
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Automated TV Plan Scheduler
           </h1>
@@ -1076,6 +1085,7 @@ export default function Schedule() {
                                 game={game}
                                 position={position}
                                 onGameClick={openGameModal}
+                                favoriteTeams={userPreferences?.favoriteNbaTeams || []}
                               />
                             )
                           })}
@@ -1307,6 +1317,36 @@ export default function Schedule() {
                     </div>
                   </div>
                 )}
+
+                {/* Color Legend */}
+                <div className="mt-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Color Legend</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {/* Game On Air */}
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200"></div>
+                      <span className="text-xs text-gray-600">Game On Air</span>
+                    </div>
+                    
+                    {/* Favorite Team */}
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-200 to-blue-300 border-2 border-blue-400"></div>
+                      <span className="text-xs text-gray-600">Favorite Team</span>
+                    </div>
+                    
+                    {/* Network TBD */}
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-200"></div>
+                      <span className="text-xs text-gray-600">Network TBD</span>
+                    </div>
+                    
+                    {/* Not Airing Locally */}
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 rounded bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200"></div>
+                      <span className="text-xs text-gray-600">Not Airing Locally</span>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -1775,7 +1815,7 @@ export default function Schedule() {
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center space-x-3 bg-blue-50 px-4 py-2 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">
-                      {selectedGame.gameStatusText}
+                      {convertToPacificTime(selectedGame.gameStatusText)}
                     </div>
                     <div className="text-gray-600">
                       {formatDate(selectedGame.gameDateEst)}
@@ -1790,8 +1830,15 @@ export default function Schedule() {
                     {/* Away Team */}
                     <div className="text-center flex-1">
                       <div className="text-sm text-gray-500 mb-1">Away</div>
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {selectedGame.awayTeam.teamCity} {selectedGame.awayTeam.teamName}
+                      <div className="flex items-center justify-center space-x-2 mb-1">
+                        <img 
+                          src={getTeamLogo(selectedGame.awayTeam.teamTricode)} 
+                          alt={`${selectedGame.awayTeam.teamTricode} logo`}
+                          className="w-8 h-8 object-contain"
+                        />
+                        <div className="text-xl font-bold text-gray-900">
+                          {selectedGame.awayTeam.teamCity} {selectedGame.awayTeam.teamName}
+                        </div>
                       </div>
                       <div className="bg-gray-200 text-gray-700 px-3 py-1 rounded font-mono text-sm">
                         {selectedGame.awayTeam.teamTricode}
@@ -1809,8 +1856,15 @@ export default function Schedule() {
                     {/* Home Team */}
                     <div className="text-center flex-1">
                       <div className="text-sm text-gray-500 mb-1">Home</div>
-                      <div className="text-xl font-bold text-gray-900 mb-1">
-                        {selectedGame.homeTeam.teamCity} {selectedGame.homeTeam.teamName}
+                      <div className="flex items-center justify-center space-x-2 mb-1">
+                        <img 
+                          src={getTeamLogo(selectedGame.homeTeam.teamTricode)} 
+                          alt={`${selectedGame.homeTeam.teamTricode} logo`}
+                          className="w-8 h-8 object-contain"
+                        />
+                        <div className="text-xl font-bold text-gray-900">
+                          {selectedGame.homeTeam.teamCity} {selectedGame.homeTeam.teamName}
+                        </div>
                       </div>
                       <div className="bg-gray-200 text-gray-700 px-3 py-1 rounded font-mono text-sm">
                         {selectedGame.homeTeam.teamTricode}
