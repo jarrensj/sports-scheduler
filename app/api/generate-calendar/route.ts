@@ -793,7 +793,7 @@ JSON FORMATTING REQUIREMENTS:
     }
     
     // Check for empty TVs
-    const emptyTvs = Object.entries(tvSchedule).filter(([_, games]) => games.length === 0).map(([tv]) => tv)
+    const emptyTvs = Object.entries(tvSchedule).filter(([, games]) => games.length === 0).map(([tv]) => tv)
     if (emptyTvs.length > 0) {
       console.error(`WARNING: ${emptyTvs.length} TVs have NO games assigned: ${emptyTvs.join(', ')}`)
     } else {

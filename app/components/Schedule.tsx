@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { GameCalendarCard } from './GameCalendarCard'
 import UserPreferences from './UserPreferences'
-import AICalendar from './AICalendar'
 
 interface Team {
   teamId: number
