@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "hi",
-  description: "hi",
+  title: "Automated TV Plan Scheduler",
+  description: "Automated TV Plan Scheduler",
 };
 
 export default function RootLayout({
