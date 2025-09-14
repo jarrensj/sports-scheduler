@@ -1840,11 +1840,6 @@ export default function Schedule() {
                         )
                       })}
                     </div>
-
-
-                    {/* Daily TV Programming Guide - Hidden due to inconsistent logic */}
-                    {/* The main Optimized Viewing Plan above shows the correct AI-generated schedule */}
-
                     {/* Recommendations */}
                     <div className="bg-blue-50 rounded-lg p-4 mb-6">
                       <h4 className="font-semibold text-blue-900 mb-2">AI Recommendations</h4>
