@@ -885,48 +885,87 @@ export default function Schedule() {
                               ))}
                             </div>
 
-                            {/* TV-based timeline view showing transitions */}
-                            <div className="space-y-2 pt-2" style={{ height: 'calc(100% - 40px)' }}>
-                              {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, tvGames]) => {
-                                // Filter games for this specific day
-                                const dayTvGames = (tvGames as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>)
-                                  .filter(game => {
-                                    const gameDate = new Date(game.gameDateEst).toDateString()
-                                    return gameDate === day.date.toDateString()
-                                  })
-                                  .sort((a, b) => a.gameStatusText.localeCompare(b.gameStatusText))
-                                
-                                if (dayTvGames.length === 0) return null
-                                
-                                return (
-                                  <div key={`tv-${tvNumber}-${day.date.toDateString()}`} className="bg-gray-50 rounded-lg p-3 border">
-                                    <div className="flex items-center mb-2">
-                                      <div className="bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold mr-2">
-                                        TV{tvNumber}
-                                      </div>
-                                      <span className="text-xs text-gray-600">{dayTvGames.length} game{dayTvGames.length !== 1 ? 's' : ''} with transitions</span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1">
-                                      {dayTvGames.map((game, gameIndex) => (
-                                        <div key={`${game.gameId}-${gameIndex}`} className="flex items-center">
-                                          <div 
-                                            className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                                            style={{ backgroundColor: game.color, color: 'white' }}
-                                            onClick={() => openGameModal(game)}
-                                            title={`${game.reasoning} | Priority: ${game.priority}`}
-                                          >
-                                            <div className="font-bold">{game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}</div>
-                                            <div className="text-xs opacity-90">{game.assignedTimeSlot || game.gameStatusText}</div>
-                                          </div>
-                                          {gameIndex < dayTvGames.length - 1 && (
-                                            <div className="mx-1 text-gray-400 text-xs">→</div>
-                                          )}
+                            {/* TV-based side-by-side timeline view - Improved Readability */}
+                            <div className="pt-4 overflow-auto" style={{ height: 'calc(100% - 40px)' }}>
+                              <div className="grid gap-4 min-h-full" style={{ gridTemplateColumns: `repeat(${Math.min(Object.keys(generatedCalendar.tvSchedule).length, 3)}, 1fr)` }}>
+                                {Object.entries(generatedCalendar.tvSchedule).map(([tvNumber, tvGames]) => {
+                                  // Filter games for this specific day
+                                  const dayTvGames = (tvGames as Array<Game & { priority: number; tvAssignment: number; color: string; reasoning: string; assignedDate?: string; assignedTimeSlot?: string }>)
+                                    .filter(game => {
+                                      const gameDate = new Date(game.gameDateEst).toDateString()
+                                      return gameDate === day.date.toDateString()
+                                    })
+                                    .sort((a, b) => a.gameStatusText.localeCompare(b.gameStatusText))
+                                  
+                                  return (
+                                    <div key={`tv-${tvNumber}-${day.date.toDateString()}`} className="bg-white rounded-xl p-4 border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                      {/* TV Header */}
+                                      <div className="flex items-center justify-center mb-4">
+                                        <div className="bg-gradient-to-r from-gray-800 to-gray-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm">
+                                          📺 TV {tvNumber}
                                         </div>
-                                      ))}
+                                      </div>
+                                      
+                                      {/* Games Timeline */}
+                                      {dayTvGames.length === 0 ? (
+                                        <div className="flex items-center justify-center py-8 text-gray-400 bg-gray-50 rounded-lg">
+                                          <div className="text-center">
+                                            <div className="text-2xl mb-2">📺</div>
+                                            <div className="text-sm font-medium">No games scheduled</div>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-3">
+                                          {dayTvGames.map((game, gameIndex) => (
+                                            <div key={`${game.gameId}-${gameIndex}`}>
+                                              {/* Game Card */}
+                                              <div 
+                                                className="p-3 rounded-lg cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm border-2 border-transparent hover:border-white"
+                                                style={{ backgroundColor: game.color }}
+                                                onClick={() => openGameModal(game)}
+                                                title={`${game.reasoning} | Priority: ${game.priority}/10`}
+                                              >
+                                                <div className="text-white">
+                                                  <div className="font-bold text-center text-sm mb-1">
+                                                    {game.awayTeam.teamTricode} @ {game.homeTeam.teamTricode}
+                                                  </div>
+                                                  <div className="text-xs text-center opacity-90 font-medium">
+                                                    {game.assignedTimeSlot || game.gameStatusText}
+                                                  </div>
+                                                  <div className="text-xs text-center opacity-75 mt-1">
+                                                    Priority: {game.priority}/10
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              
+                                              {/* Transition Arrow */}
+                                              {gameIndex < dayTvGames.length - 1 && (
+                                                <div className="flex justify-center py-2">
+                                                  <div className="flex items-center space-x-1 text-gray-500">
+                                                    <div className="w-8 h-px bg-gray-300"></div>
+                                                    <div className="text-lg">⬇️</div>
+                                                    <div className="w-8 h-px bg-gray-300"></div>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      
+                                      {/* TV Summary */}
+                                      {dayTvGames.length > 0 && (
+                                        <div className="mt-4 pt-3 border-t border-gray-200">
+                                          <div className="text-xs text-gray-600 text-center">
+                                            <span className="font-medium">{dayTvGames.length} game{dayTvGames.length !== 1 ? 's' : ''}</span>
+                                            {dayTvGames.length > 1 && <span> with transitions</span>}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
-                                  </div>
-                                )
-                              })}
+                                  )
+                                })}
+                              </div>
                             </div>
                           </div>
                         ))}
