@@ -412,7 +412,6 @@ JSON FORMATTING REQUIREMENTS:
 - All strings must be properly quoted with double quotes
 - No trailing commas in arrays or objects
 - Escape any quotes within string values with backslash
-- Complete all reasoning strings - do not leave them incomplete
 - Ensure all objects and arrays are properly closed
 
 - MANDATORY TV TRANSITIONS: Every TV must show ALL games on each date in chronological order
@@ -433,15 +432,16 @@ JSON FORMATTING REQUIREMENTS:
       messages: [
         {
           role: "system",
-          content: "You are a sports viewing optimizer that helps users manage multiple NBA games across multiple TVs. Always respond with valid JSON."
+          content: "You are a sports viewing optimizer that helps users manage multiple NBA games across multiple TVs. You MUST respond with ONLY valid JSON. No extra text before or after the JSON. Start with { and end with }."
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 2000
+      temperature: 0.3,
+      max_tokens: 3000,
+      response_format: { type: "json_object" }
     })
 
     const aiResponse = completion.choices[0]?.message?.content
@@ -450,35 +450,38 @@ JSON FORMATTING REQUIREMENTS:
     }
 
     let aiData
-    let jsonString = ''
     try {
       // Log the raw response for debugging
-      console.log('Raw AI response:', aiResponse)
+      console.log('Raw AI response length:', aiResponse.length)
+      console.log('Raw AI response preview:', aiResponse.substring(0, 200) + '...')
       
-      // Try to extract JSON from the response (sometimes AI includes extra text)
-      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
-      jsonString = jsonMatch ? jsonMatch[0] : aiResponse
+      // With response_format: json_object, the response should be valid JSON
+      aiData = JSON.parse(aiResponse)
+      console.log('✅ Successfully parsed AI response')
       
-      // Clean up common JSON issues from AI responses
-      jsonString = jsonString
-        .replace(/,\s*}/g, '}') // Remove trailing commas before closing braces
-        .replace(/,\s*]/g, ']') // Remove trailing commas before closing brackets
-        .replace(/"reasoning"\s*:\s*"([^"]*?)"\s*$/m, '"reasoning": "$1"') // Fix incomplete reasoning fields
-        .replace(/"\s*\n\s*}/g, '"}') // Fix missing closing quotes before closing braces
-      
-      console.log('Cleaned JSON string:', jsonString)
-      aiData = JSON.parse(jsonString)
-    } catch (error) {
-      console.error('Failed to parse AI response after cleanup:', jsonString)
-      console.error('Parse error:', error)
-      
-      // Fallback: Use our forced distribution logic
-      console.warn('Using fallback distribution due to JSON parse error')
-      aiData = {
-        tvAssignments: [],
-        recommendations: ['AI response parsing failed - using automatic assignments'],
-        weekSummary: `Automatic viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)} (AI parsing failed)`
+      // Validate required fields
+      if (!aiData.tvAssignments || !Array.isArray(aiData.tvAssignments)) {
+        throw new Error('AI response missing valid tvAssignments array')
       }
+      
+      if (!aiData.recommendations || !Array.isArray(aiData.recommendations)) {
+        console.warn('AI response missing recommendations, adding default')
+        aiData.recommendations = ['AI-generated TV schedule based on your preferences']
+      }
+      
+      if (!aiData.weekSummary || typeof aiData.weekSummary !== 'string') {
+        console.warn('AI response missing weekSummary, adding default')
+        aiData.weekSummary = `AI-optimized viewing plan for ${formatWeekRange(weekData.weekStart, weekData.weekEnd)}`
+      }
+      
+      console.log(`AI provided ${aiData.tvAssignments.length} TV assignments`)
+      
+    } catch (error) {
+      console.error('❌ Failed to parse AI response:', error)
+      console.error('Raw response that failed:', aiResponse)
+      
+      // This should not happen with response_format: json_object, but just in case
+      throw new Error(`AI response parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}. This indicates an issue with the AI service.`)
     }
 
     // Ensure aiData has the expected structure
@@ -540,44 +543,24 @@ JSON FORMATTING REQUIREMENTS:
             }
             
             if (gamesAtTime.length === 1) {
-              // Single game - distribute across available TVs to utilize all TVs
+              // Single game - ALL TVs should show the same game (no conflicts)
               const game = gamesAtTime[0]
               const gameDate = game.gameDateEst.split(' ')[0]
               const timeSlotRange = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
               
-              // Find the TV with the least assignments so far for better distribution
-              const tvAssignmentCounts = new Map<number, number>()
-              for (let tv = 1; tv <= userPreferences.numberOfTvs; tv++) {
-                tvAssignmentCounts.set(tv, 0)
+              // Assign this game to ALL TVs since there's no conflict
+              for (let tvNumber = 1; tvNumber <= userPreferences.numberOfTvs; tvNumber++) {
+                assignments.push({
+                  gameId: game.gameId,
+                  tvNumber: tvNumber,
+                  date: gameDate,
+                  timeSlot: timeSlotRange,
+                  reasoning: `All TVs show ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} at ${timeSlot} on ${date} - no conflicts, all TVs available`
+                })
+                
+                tvScheduleByTime.get(timeSlot)!.add(tvNumber)
+                console.log(`TV ${tvNumber}: Shows ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (all TVs show same game)`)
               }
-              
-              // Count existing assignments
-              assignments.forEach(assignment => {
-                const currentCount = tvAssignmentCounts.get(assignment.tvNumber) || 0
-                tvAssignmentCounts.set(assignment.tvNumber, currentCount + 1)
-              })
-              
-              // Find TV with minimum assignments
-              let bestTv = 1
-              let minAssignments = tvAssignmentCounts.get(1) || 0
-              for (let tv = 2; tv <= userPreferences.numberOfTvs; tv++) {
-                const count = tvAssignmentCounts.get(tv) || 0
-                if (count < minAssignments) {
-                  minAssignments = count
-                  bestTv = tv
-                }
-              }
-              
-              assignments.push({
-                gameId: game.gameId,
-                tvNumber: bestTv,
-                date: gameDate,
-                timeSlot: timeSlotRange,
-                reasoning: `Single game at ${timeSlot} on ${date} - assigned to TV ${bestTv} for balanced distribution`
-              })
-              
-              tvScheduleByTime.get(timeSlot)!.add(bestTv)
-              console.log(`TV ${bestTv}: Single game ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} (balanced distribution)`)
               
             } else {
               // Multiple games at same time - distribute across available TVs
