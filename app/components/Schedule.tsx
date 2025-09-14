@@ -644,6 +644,76 @@ export default function Schedule() {
     setUserPreferences(preferences)
   }, [])
 
+  // Send optimized calendar via email
+  const sendOptimizedCalendarEmail = async () => {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      setEmailStatus({ type: 'error', message: 'Please enter a valid email address' })
+      return
+    }
+
+    if (!generatedCalendar) {
+      setEmailStatus({ type: 'error', message: 'No optimized calendar available' })
+      return
+    }
+
+    if (!weeks[currentWeek]) {
+      setEmailStatus({ type: 'error', message: 'No week data available' })
+      return
+    }
+
+    setIsEmailSending(true)
+    setEmailStatus(null)
+
+    try {
+      const weekData = {
+        weekStart: weeks[currentWeek].weekStart.toISOString(),
+        weekEnd: weeks[currentWeek].weekEnd.toISOString(),
+        games: generatedCalendar.optimizedGames,
+        tvSchedule: generatedCalendar.tvSchedule,
+        recommendations: generatedCalendar.recommendations,
+        weekSummary: generatedCalendar.weekSummary,
+        isOptimized: true
+      }
+
+      const response = await fetch('/api/email-schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          weekData,
+          recipientEmail: emailAddress,
+          isOptimizedCalendar: true
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send email')
+      }
+
+      setEmailStatus({ 
+        type: 'success', 
+        message: `Optimized viewing plan sent successfully to ${emailAddress}!` 
+      })
+      
+      // Close email input after 2 seconds
+      setTimeout(() => {
+        setEmailStatus(null)
+        setEmailAddress('')
+      }, 3000)
+
+    } catch (error) {
+      setEmailStatus({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to send email' 
+      })
+    } finally {
+      setIsEmailSending(false)
+    }
+  }
+
   // Generate calendar handlers
   const openGenerateModal = () => {
     setIsGenerateModalOpen(true)
@@ -1943,6 +2013,61 @@ export default function Schedule() {
                           <span>Low Priority</span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Email Section */}
+                    <div className="bg-green-50 rounded-lg p-4 mb-6">
+                      <h4 className="font-semibold text-green-900 mb-3">📧 Email This Plan</h4>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="email"
+                          placeholder="Enter your email address"
+                          value={emailAddress}
+                          onChange={(e) => setEmailAddress(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        />
+                        <button
+                          onClick={sendOptimizedCalendarEmail}
+                          disabled={isEmailSending || !emailAddress}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-2"
+                        >
+                          {isEmailSending ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              <span>Send Email</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      
+                      {/* Email Status */}
+                      {emailStatus && (
+                        <div className={`mt-3 p-3 rounded-lg ${
+                          emailStatus.type === 'success' 
+                            ? 'bg-green-100 text-green-800 border border-green-200' 
+                            : 'bg-red-100 text-red-800 border border-red-200'
+                        }`}>
+                          <div className="flex items-center space-x-2">
+                            {emailStatus.type === 'success' ? (
+                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                              </svg>
+                            )}
+                            <span className="font-medium">{emailStatus.message}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-end space-x-3">

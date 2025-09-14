@@ -54,6 +54,10 @@ interface WeekData {
   weekStart: string
   weekEnd: string
   games: Game[]
+  tvSchedule?: Record<number, Game[]>
+  recommendations?: string[]
+  weekSummary?: string
+  isOptimized?: boolean
 }
 
 function formatWeekRange(weekStart: string, weekEnd: string) {
@@ -225,9 +229,124 @@ function generateEmailHTML(weekData: WeekData) {
   `
 }
 
+function generateOptimizedEmailHTML(weekData: WeekData) {
+  const weekRange = formatWeekRange(weekData.weekStart, weekData.weekEnd)
+  
+  // Generate TV Schedule HTML
+  let tvScheduleHTML = ''
+  if (weekData.tvSchedule) {
+    tvScheduleHTML = Object.entries(weekData.tvSchedule)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([tvNumber, games]) => {
+        const gamesList = games as Array<Game & { priority?: number; color?: string; reasoning?: string }>
+        
+        const gamesHTML = gamesList.map(game => `
+          <div style="background-color: #f8fafc; border-left: 4px solid ${game.color || '#3b82f6'}; padding: 12px; margin-bottom: 8px; border-radius: 6px;">
+            <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">
+              ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode}
+            </div>
+            <div style="color: #6b7280; font-size: 14px;">
+              ${formatGameTime(game.gameStatusText)}
+            </div>
+            ${game.reasoning && !game.reasoning.includes('duplicate') ? `
+              <div style="color: #6b7280; font-size: 12px; margin-top: 4px; font-style: italic;">
+                ${game.reasoning}
+              </div>
+            ` : ''}
+          </div>
+        `).join('')
+
+        return `
+          <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <h3 style="margin: 0 0 12px 0; color: #374151; font-size: 18px; font-weight: 600; display: flex; align-items: center;">
+              📺 TV ${tvNumber} (${gamesList.length} games)
+            </h3>
+            ${gamesHTML || '<p style="color: #9ca3af; text-align: center; margin: 16px 0;">No games assigned to this TV</p>'}
+          </div>
+        `
+      }).join('')
+  }
+
+  // Generate Recommendations HTML
+  let recommendationsHTML = ''
+  if (weekData.recommendations && weekData.recommendations.length > 0) {
+    recommendationsHTML = `
+      <div style="background-color: #dbeafe; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 12px 0; color: #1e40af; font-size: 18px; font-weight: 600;">
+          🤖 AI Recommendations
+        </h3>
+        <ul style="margin: 0; padding-left: 20px; color: #1e40af;">
+          ${weekData.recommendations.map(rec => `<li style="margin-bottom: 4px;">${rec}</li>`).join('')}
+        </ul>
+      </div>
+    `
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>AI-Optimized Sports Schedule</title>
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+      <div style="background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+        <header style="background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%); color: white; padding: 32px 24px; text-align: center;">
+          <h1 style="margin: 0 0 8px 0; font-size: 32px; font-weight: bold; display: flex; align-items: center; justify-content: center;">
+            <span style="margin-right: 12px;">🧠</span>
+            AI-Optimized Viewing Plan
+          </h1>
+          <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; opacity: 0.9;">${weekRange}</h2>
+          ${weekData.weekSummary ? `<p style="margin: 0; font-size: 16px; opacity: 0.8;">${weekData.weekSummary}</p>` : ''}
+        </header>
+        
+        <div style="padding: 32px 24px;">
+          ${recommendationsHTML}
+          
+          <h2 style="color: #374151; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">
+            📺 TV Schedule
+          </h2>
+          ${tvScheduleHTML}
+          
+          <div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px; margin-top: 24px;">
+            <h4 style="margin: 0 0 8px 0; color: #374151; font-size: 16px; font-weight: 600;">Priority Color Scale</h4>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 16px; height: 16px; background-color: rgb(0, 165, 255); border-radius: 2px;"></div>
+                <span>High Priority</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 16px; height: 16px; background-color: rgb(128, 210, 128); border-radius: 2px;"></div>
+                <span>Medium Priority</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 16px; height: 16px; background-color: rgb(255, 255, 0); border-radius: 2px;"></div>
+                <span>Low Priority</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <footer style="background-color: #f3f4f6; padding: 16px 24px; text-align: center; color: #6b7280; font-size: 14px;">
+          <p style="margin: 0;">AI-Generated on ${new Date().toLocaleDateString('en-US', { 
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+          })}</p>
+        </footer>
+      </div>
+    </body>
+    </html>
+  `
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { weekData, recipientEmail } = await request.json()
+    const { weekData, recipientEmail, isOptimizedCalendar } = await request.json()
 
     if (!weekData || !recipientEmail) {
       return NextResponse.json(
@@ -237,12 +356,13 @@ export async function POST(request: NextRequest) {
     }
 
     const weekRange = formatWeekRange(weekData.weekStart, weekData.weekEnd)
-    const emailHTML = generateEmailHTML(weekData)
+    const emailHTML = isOptimizedCalendar ? generateOptimizedEmailHTML(weekData) : generateEmailHTML(weekData)
+    const subject = isOptimizedCalendar ? `AI-Optimized Viewing Plan - ${weekRange}` : `Sports Schedule - ${weekRange}`
 
     const { data, error } = await resend.emails.send({
       from: 'Sports Schedule <onboarding@resend.dev>',
       to: [recipientEmail],
-      subject: `Sports Schedule - ${weekRange}`,
+      subject: subject,
       html: emailHTML,
       replyTo: 'onboarding@resend.dev',
     })
