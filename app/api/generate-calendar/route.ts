@@ -125,6 +125,19 @@ function calculatePriority(game: Game, userPreferences: UserPreferences): number
     priority += 3 // High priority for favorite teams
   }
   
+  // Consider zip code proximity for popular teams (simplified logic)
+  const zipCode = userPreferences.zipCode
+  if (zipCode) {
+    // California zip codes (90000-96000) - boost LAL, LAC, GSW, SAC
+    if (zipCode.startsWith('9')) {
+      if (['LAL', 'LAC', 'GSW', 'SAC'].includes(game.homeTeam.teamTricode) || 
+          ['LAL', 'LAC', 'GSW', 'SAC'].includes(game.awayTeam.teamTricode)) {
+        priority += 2 // Regional preference
+      }
+    }
+    // Add more regional logic as needed
+  }
+  
   // Consider playoff games
   if (game.gameLabel && (game.gameLabel.toLowerCase().includes('playoff') || 
       game.gameLabel.toLowerCase().includes('finals'))) {
@@ -395,18 +408,21 @@ Please respond with a JSON object containing:
 }
 
 Focus on:
+- MANDATORY TV TRANSITIONS: Every TV must show ALL games on each date in chronological order
+- COMPLETE DAILY COVERAGE: If there are 2 games on Monday, every TV shows both games (transitions between them)
+- NO IDLE TVS: Never leave a TV empty when games are available on that date
+- SEQUENTIAL SCHEDULING: TV1 shows Game1 (5:00-8:30), then transitions to Game2 (8:30-12:00)
+- PRIORITY-BASED PROMINENCE: Higher priority games (favorite teams, regional preferences) get better TV placement
 - MANDATORY DATE AWARENESS: Each assignment MUST include the correct date from the game data
 - DAILY INDEPENDENCE: Games on different dates can use the same TV without conflict
 - SAME-DATE CONFLICTS: Only worry about time conflicts within the same date
 - DISTRIBUTE ACROSS ALL TVs: Use TV numbers 1-${userPreferences.numberOfTvs} for each date that has games
-- MULTIPLE DAYS COVERAGE: If games span multiple dates, create assignments for each date
 - DATE FORMAT: Use YYYY-MM-DD format for dates (e.g., "2025-01-15")
 - 3.5-HOUR GAME DURATION: NBA games last ~3.5 hours including pre/post-game
-- DAILY TRANSITIONS: Within the same date, plan transitions between games
-- CROSS-DATE FREEDOM: TVs can show any game on different dates without restriction
-- PROMINENCE-BASED ASSIGNMENT: Highest priority games go on most prominent/visible TVs
-- LOCATION INTELLIGENCE: Use TV setup description provided by user to understand viewing hierarchy
-- REASONING: Always explain TV choice including the DATE and why there are no conflicts with other dates
+- TRANSITION TIMING: Plan smooth transitions when one game ends and another begins
+- FAVORITE TEAM PRIORITY: Games with user's favorite teams get premium TV assignments
+- REGIONAL PREFERENCES: Teams near user's zip code get priority consideration
+- REASONING: Always explain TV choice including transitions and priority factors
 `;
 
     const completion = await openai.chat.completions.create({
@@ -478,46 +494,40 @@ Focus on:
         
         console.log(`Processing date ${date} with ${gamesOnDate.length} games:`, gamesByTimeOnDate.map(g => `${g.awayTeam.teamTricode} @ ${g.homeTeam.teamTricode} (${g.gameStatusText})`))
         
-        // For each date, distribute games across all TVs
-        // This ensures each date gets proper TV coverage
-        gamesByTimeOnDate.forEach((game, gameIndex) => {
-          // Distribute each game across multiple TVs if we have more TVs than games on this date
-          const tvsPerGame = Math.max(1, Math.floor(userPreferences.numberOfTvs / gamesByTimeOnDate.length))
-          const extraTvs = userPreferences.numberOfTvs % gamesByTimeOnDate.length
-          
-          // Calculate how many TVs this game should get
-          let tvsForThisGame = tvsPerGame
-          if (gameIndex < extraTvs) {
-            tvsForThisGame += 1 // Distribute extra TVs to first few games
-          }
-          
-          // Assign TVs to this game
-          for (let tvOffset = 0; tvOffset < tvsForThisGame; tvOffset++) {
-            const tvNumber = (gameIndex * tvsPerGame) + tvOffset + (gameIndex < extraTvs ? gameIndex : extraTvs) + 1
+        // For each date, create proper TV transitions for ALL games
+        // Every TV should show every game on that date (transitioning between them)
+        
+        // For each TV, assign ALL games on this date in chronological order
+        for (let tvNumber = 1; tvNumber <= userPreferences.numberOfTvs; tvNumber++) {
+          gamesByTimeOnDate.forEach((game, gameIndex) => {
+            const gameDate = game.gameDateEst.split(' ')[0] // Extract date part
+            const timeSlot = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
             
-            if (tvNumber <= userPreferences.numberOfTvs) {
-              const gameDate = game.gameDateEst.split(' ')[0] // Extract date part
-              const timeSlot = `${game.gameStatusText} - ${getEndTime(game.gameStatusText)}`
-              
-              let reasoning
-              if (gamesByTimeOnDate.length < userPreferences.numberOfTvs) {
-                reasoning = `TV ${tvNumber} showing ${date} game (${tvOffset + 1} of ${tvsForThisGame} TVs for this matchup) - multi-screen coverage for date ${date}`
-              } else {
-                reasoning = `TV ${tvNumber} assigned to ${date} game - date-specific scheduling`
-              }
-              
-              assignments.push({
-                gameId: game.gameId,
-                tvNumber: tvNumber,
-                date: gameDate,
-                timeSlot: timeSlot,
-                reasoning: reasoning
-              })
-              
-              console.log(`TV ${tvNumber}: Assigned ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} on ${date} (${timeSlot})`)
+            let reasoning
+            if (gameIndex === 0) {
+              reasoning = `TV ${tvNumber} starts ${date} with this game, then transitions to later games`
+            } else {
+              reasoning = `TV ${tvNumber} transitions to this game after previous game ends on ${date}`
             }
-          }
-        })
+            
+            // Add priority context for high-priority games
+            if (game.priority >= 8) {
+              const isUserTeam = userPreferences.favoriteNbaTeams.includes(game.homeTeam.teamTricode) || 
+                                userPreferences.favoriteNbaTeams.includes(game.awayTeam.teamTricode)
+              reasoning += ` (HIGH PRIORITY: ${isUserTeam ? 'favorite team' : 'regional/quality preference'})`
+            }
+            
+            assignments.push({
+              gameId: game.gameId,
+              tvNumber: tvNumber,
+              date: gameDate,
+              timeSlot: timeSlot,
+              reasoning: reasoning
+            })
+            
+            console.log(`TV ${tvNumber}: Assigned ${game.awayTeam.teamTricode} @ ${game.homeTeam.teamTricode} on ${date} (${timeSlot}) - Priority: ${game.priority}`)
+          })
+        }
       })
       
       console.log(`Generated ${assignments.length} date-aware assignments across ${sortedDates.length} dates`)
